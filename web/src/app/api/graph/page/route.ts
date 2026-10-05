@@ -1,7 +1,10 @@
+import { requireSession } from "@/lib/server/auth";
 import { getPage, savePage } from "@/lib/graphDb";
 import { PARAGRAPH_KINDS, type PageInput } from "@/lib/types";
 
 export async function GET(request: Request) {
+  const s = await requireSession();
+  if (s instanceof Response) return s;
   const sp = new URL(request.url).searchParams;
   const stem = sp.get("stem");
   const kind = sp.get("kind") || "main";
@@ -11,6 +14,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const s = await requireSession();
+  if (s instanceof Response) return s;
   const body = (await request.json()) as PageInput;
   if (!body?.stem || !Number.isInteger(body.page) || !["main", "commentary"].includes(body.kind)) {
     return Response.json({ error: "stem, kind, page가 필요합니다" }, { status: 400 });

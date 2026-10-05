@@ -3,17 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3310",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start -p 3310",
+    "lint": "eslint",
+    "db:setup": "node --env-file-if-exists=.env.local scripts/db-setup.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "cytoscape": "^3.34.3",
     "lucide-react": "^1.52.0",
     "next": "16.3.8",
     "pg": "^8.23.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

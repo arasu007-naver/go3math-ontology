@@ -2,6 +2,7 @@
 
 import { BookPlus, Network, RefreshCw, Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
 import { itemBodyRaw } from "@/lib/format";
 import { flattenToc, kindForCategory, stripExt, tocKeyForPage } from "@/lib/toc";
 import { PARAGRAPH_KINDS, type ParagraphKind, type ProblemRef, type SavedPage, type SelectedBook, type TocNodeInput } from "@/lib/types";
@@ -25,9 +26,12 @@ type Props = {
   book: SelectedBook | null;
   kind: "main" | "commentary";
   page: number | null;
+  imageUrl: string | null;
   json: JsonState;
   onToast: (msg: string, type?: "success" | "error") => void;
 };
+
+type CurriculumOption = { id: string; name: string; level?: string };
 
 const label = "text-[10px] font-bold text-gray-400 uppercase tracking-wide";
 const input =
@@ -49,7 +53,7 @@ function guessSourceOrder(title: string) {
   return i === -1 ? "" : String(i + 1);
 }
 
-function BookGraphForm({ book, kind, page, json, onToast }: Props & { book: SelectedBook }) {
+function BookGraphForm({ book, kind, page, imageUrl, json, onToast }: Props & { book: SelectedBook }) {
   const tocNodes = useMemo(() => flattenToc(book.toc), [book]);
 
   // --- 도서 ---
@@ -59,28 +63,35 @@ function BookGraphForm({ book, kind, page, json, onToast }: Props & { book: Sele
   const [summary, setSummary] = useState<BookSummary>(null);
   const [savingBook, setSavingBook] = useState(false);
   const [problems, setProblems] = useState<ProblemRef[]>([]);
+  // 교육과정·과목 노드와 TOC 항목별 대응
+  const [curriculum, setCurriculum] = useState<CurriculumOption[]>([]);
+  const [mappings, setMappings] = useState<Record<string, string[]>>({});
 
   const loadSummary = useCallback(async () => {
-    const res = await fetch(`/api/graph/book?stem=${encodeURIComponent(book.stem)}`);
+    const res = await api(`/api/graph/book?stem=${encodeURIComponent(book.stem)}`);
     const data = await res.json();
     setSummary(data.book);
     return data.book as BookSummary;
   }, [book.stem]);
 
   const loadProblems = useCallback(async () => {
-    const res = await fetch(`/api/graph/problems?stem=${encodeURIComponent(book.stem)}`);
+    const res = await api(`/api/graph/problems?stem=${encodeURIComponent(book.stem)}`);
     setProblems((await res.json()).problems || []);
   }, [book.stem]);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch(`/api/graph/book?stem=${encodeURIComponent(book.stem)}`).then((r) => r.json()),
-      fetch(`/api/graph/problems?stem=${encodeURIComponent(book.stem)}`).then((r) => r.json()),
-    ]).then(([b, p]) => {
+      api(`/api/graph/book?stem=${encodeURIComponent(book.stem)}`).then((r) => r.json()),
+      api(`/api/graph/problems?stem=${encodeURIComponent(book.stem)}`).then((r) => r.json()),
+      api(`/api/graph/network`).then((r) => r.json()),
+      api(`/api/graph/mapping?stem=${encodeURIComponent(book.stem)}`).then((r) => r.json()),
+    ]).then(([b, p, net, m]) => {
       if (cancelled) return;
       setSummary(b.book);
       setProblems(p.problems || []);
+      setCurriculum(((net.nodes || []) as (CurriculumOption & { type: string })[]).filter((n) => n.type === "curriculum"));
+      setMappings(m.mappings || {});
       if (b.book) {
         setTitle(b.book.title);
         setSourceOrder(b.book.sourceOrder ? String(b.book.sourceOrder) : "");
@@ -95,7 +106,7 @@ function BookGraphForm({ book, kind, page, json, onToast }: Props & { book: Sele
   const saveBook = async () => {
     setSavingBook(true);
     try {
-      const res = await fetch("/api/graph/book", {
+      const res = await api("/api/graph/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -216,6 +227,19 @@ function BookGraphForm({ book, kind, page, json, onToast }: Props & { book: Sele
           problems={problems}
           onSaved={() => Promise.all([loadProblems(), loadSummary()])}
           onToast={onToast}
+          imageUrl={imageUrl}
+          curriculum={curriculum}
+          mappings={mappings}
+          onMap={async (tocKey, ids) => {
+            const res = await api("/api/graph/mapping", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ stem: book.stem, tocKey, curriculumIds: ids }),
+            });
+            const data = await res.json();
+            if (!res.ok) return onToast(data.error, "error");
+            setMappings((m) => ({ ...m, [tocKey]: ids }));
+          }}
         />
       </div>
     </section>
@@ -233,6 +257,10 @@ type PageFormProps = {
   problems: ProblemRef[];
   onSaved: () => Promise<unknown>;
   onToast: Props["onToast"];
+  imageUrl: string | null;
+  curriculum: CurriculumOption[];
+  mappings: Record<string, string[]>;
+  onMap: (tocKey: string, curriculumIds: string[]) => Promise<void>;
 };
 
 function rowsFromJson(json: JsonState): Row[] {
@@ -243,7 +271,8 @@ function rowsFromJson(json: JsonState): Row[] {
   });
 }
 
-function PageForm({ book, kind, page, json, tocNodes, pageOffset, bookSaved, problems, onSaved, onToast }: PageFormProps) {
+function PageForm(props: PageFormProps) {
+  const { book, kind, page, json, tocNodes, pageOffset, bookSaved, problems, onSaved, onToast } = props;
   const pageIdPrefix = page != null ? `para:${book.stem.normalize("NFC")}:${kind}:${page}:` : "";
   const otherProblems = problems.filter((p) => !p.id.startsWith(pageIdPrefix));
   const autoTocKey = kind === "main" && page != null ? tocKeyForPage(tocNodes, page - pageOffset) : null;
@@ -258,7 +287,7 @@ function PageForm({ book, kind, page, json, tocNodes, pageOffset, bookSaved, pro
     let cancelled = false;
     if (page == null) return;
     (async () => {
-      const res = await fetch(`/api/graph/page?stem=${encodeURIComponent(book.stem)}&kind=${kind}&page=${page}`);
+      const res = await api(`/api/graph/page?stem=${encodeURIComponent(book.stem)}&kind=${kind}&page=${page}`);
       const sp: SavedPage | null = (await res.json()).page;
       if (cancelled || !sp) return;
       setSaved(sp);
@@ -308,7 +337,7 @@ function PageForm({ book, kind, page, json, tocNodes, pageOffset, bookSaved, pro
     }
     setSavingPage(true);
     try {
-      const res = await fetch("/api/graph/page", {
+      const res = await api("/api/graph/page", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -317,13 +346,14 @@ function PageForm({ book, kind, page, json, tocNodes, pageOffset, bookSaved, pro
           page,
           tocKey: tocKey || null,
           jsonKey: json.status === "ok" ? json.key : null,
+          imageUrl: props.imageUrl,
           paragraphs,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       onToast(`${page}페이지 문단 ${data.paragraphCount}개를 저장했습니다.`);
-      const r2 = await fetch(`/api/graph/page?stem=${encodeURIComponent(book.stem)}&kind=${kind}&page=${page}`);
+      const r2 = await api(`/api/graph/page?stem=${encodeURIComponent(book.stem)}&kind=${kind}&page=${page}`);
       setSaved((await r2.json()).page);
       await onSaved();
     } catch (e) {
@@ -366,6 +396,13 @@ function PageForm({ book, kind, page, json, tocNodes, pageOffset, bookSaved, pro
                 ))}
               </select>
             </label>
+            {tocKey && (
+              <CurriculumMapping
+                ids={props.mappings[tocKey] || []}
+                options={props.curriculum}
+                onChange={(ids) => props.onMap(tocKey, ids)}
+              />
+            )}
           </div>
         </fieldset>
 
@@ -458,5 +495,40 @@ function PageForm({ book, kind, page, json, tocNodes, pageOffset, bookSaved, pro
         </button>
       </div>
     </>
+  );
+}
+
+// 선택한 TOC 항목에 대응하는 교육과정·과목 노드 (바로 저장)
+function CurriculumMapping({ ids, options, onChange }: { ids: string[]; options: CurriculumOption[]; onChange: (ids: string[]) => void }) {
+  const name = (id: string) => options.find((o) => o.id === id)?.name ?? id;
+  return (
+    <div className="col-span-3 space-y-1">
+      <span className={label}>이 TOC 항목에 대응하는 교육과정·과목</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {ids.map((id) => (
+          <span key={id} className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 text-[11px] text-indigo-300">
+            {name(id)}
+            <button type="button" onClick={() => onChange(ids.filter((x) => x !== id))} className="text-indigo-400 hover:text-white" title="대응 해제">
+              ×
+            </button>
+          </span>
+        ))}
+        <select
+          value=""
+          onChange={(e) => e.target.value && onChange([...ids, e.target.value])}
+          className="bg-[#121824] border border-white/10 rounded px-1.5 py-0.5 text-[11px] text-gray-300 outline-none focus:border-orange-500"
+        >
+          <option value="">+ 과목 추가</option>
+          {options
+            .filter((o) => !ids.includes(o.id))
+            .map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name} ({o.level})
+              </option>
+            ))}
+        </select>
+        {options.length === 0 && <span className="text-[10px] text-gray-500">과목 노드가 없습니다. 과목 그물 화면에서 먼저 등록하세요.</span>}
+      </div>
+    </div>
   );
 }

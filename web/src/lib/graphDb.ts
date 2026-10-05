@@ -3,9 +3,12 @@ import path from "node:path";
 import { Pool, type PoolClient } from "pg";
 import type { BookInput, PageInput, ProblemRef, SavedPage, SavedParagraph } from "./types";
 
-// TOC 중심 knowledge graph (스펙 2026-10-05). 노드: book / toc / page / paragraph. Postgres 스키마 kg.
-// 관계는 시작 범위의 5가지만 쓴다.
+// TOC 중심 knowledge graph (스펙 2026-10-05). Postgres 스키마 kg (db/schema.sql).
+// 노드: category(최상위 7) / curriculum(교육과정·과목) / book / toc / page / paragraph. 관계는 스펙의 시작 범위 8가지.
 export const EDGE = {
+  CATEGORY_HAS: "CATEGORY_HAS", // 최상위 카테고리 → 교육과정·과목 노드
+  PREREQ_OF: "PREREQ_OF", // 과목 A → 과목 B (A 가 B 의 선수)
+  MAPS_TO: "MAPS_TO", // 교육과정·과목 노드 → 교재 TOC 항목
   BOOK_HAS_TOC: "HAS_TOC", // 도서 → (최상위) TOC 항목
   TOC_HAS_CHILD: "HAS_CHILD", // TOC 항목 → 하위 TOC 항목
   TOC_POINTS_PAGE: "POINTS_TO", // TOC 항목 → 페이지
@@ -44,13 +47,30 @@ async function tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
   }
 }
 
+export async function withReadOnly<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
+  await ensureSchema();
+  const c = await pool.connect();
+  try {
+    await c.query("BEGIN READ ONLY");
+    await c.query("SET LOCAL statement_timeout = '5s'");
+    await c.query("SET LOCAL search_path = kg");
+    return await fn(c);
+  } finally {
+    await c.query("ROLLBACK").catch(() => {});
+    c.release();
+  }
+}
+
 async function q<T>(sql: string, params: unknown[] = []): Promise<T[]> {
   await ensureSchema();
   return (await pool.query(sql, params)).rows as T[];
 }
 
 const nfc = (s: string) => s.normalize("NFC");
+export const CURRICULUM_BOOK = "curriculum";
 export const ids = {
+  category: (name: string) => `cat:${nfc(name)}`,
+  curriculum: (name: string) => `cur:${nfc(name)}`,
   book: (stem: string) => `book:${nfc(stem)}`,
   toc: (stem: string, key: string) => `toc:${nfc(stem)}:${key}`,
   page: (stem: string, kind: string, page: number) => `page:${nfc(stem)}:${kind}:${page}`,
@@ -144,7 +164,12 @@ export async function savePage(input: PageInput) {
     if (!(await exists(bookId))) throw new Error("도서가 그래프에 없습니다. 먼저 '도서·TOC 저장'을 하세요.");
     if (tocId && !(await exists(tocId))) throw new Error(`TOC 항목이 그래프에 없습니다: ${input.tocKey}`);
 
-    await upsertNode(c, pageId, "page", bookId, { kind: input.kind, page: input.page, jsonKey: input.jsonKey });
+    await upsertNode(c, pageId, "page", bookId, {
+      kind: input.kind,
+      page: input.page,
+      jsonKey: input.jsonKey,
+      imageUrl: input.imageUrl,
+    });
     await c.query(`DELETE FROM kg.edges WHERE dst = $1 AND type = $2`, [pageId, EDGE.TOC_POINTS_PAGE]);
     if (tocId) await addEdge(c, tocId, pageId, EDGE.TOC_POINTS_PAGE);
 
@@ -216,3 +241,123 @@ export async function listProblems(stem: string): Promise<ProblemRef[]> {
     [EDGE.PAGE_HAS_PARAGRAPH, ids.book(stem)]
   );
 }
+
+// ---------- 교육과정·과목 그물 ----------
+
+export type NetworkNode = { id: string; type: "category" | "curriculum"; name: string; level?: string; order: number; mapCount: number };
+export type NetworkEdge = { src: string; dst: string; type: "CATEGORY_HAS" | "PREREQ_OF" };
+
+export async function getNetwork(): Promise<{ nodes: NetworkNode[]; edges: NetworkEdge[] }> {
+  const nodes = await q<NetworkNode>(
+    `SELECT n.id, n.type, n.props->>'name' AS name, n.props->>'level' AS level, COALESCE((n.props->>'order')::int, 0) AS "order",
+            (SELECT COUNT(*)::int FROM kg.edges m WHERE m.src = n.id AND m.type = $1) AS "mapCount"
+     FROM kg.nodes n WHERE n.type IN ('category', 'curriculum') ORDER BY n.type, "order", name`,
+    [EDGE.MAPS_TO]
+  );
+  const edges = await q<NetworkEdge>(`SELECT src, dst, type FROM kg.edges WHERE type IN ($1, $2)`, [EDGE.CATEGORY_HAS, EDGE.PREREQ_OF]);
+  return { nodes, edges };
+}
+
+// 과목 노드 추가/수정 (이름이 id 라 이름 변경은 props.name 만 바뀐다)
+export async function saveCurriculum(input: { id?: string; name: string; level: string; categoryIds: string[] }) {
+  return tx(async (c) => {
+    const id = input.id || ids.curriculum(input.name);
+    const prev = await c.query(`SELECT props FROM kg.nodes WHERE id = $1 AND type = 'curriculum'`, [id]);
+    if (input.id && !prev.rowCount) throw new Error(`과목 노드가 없습니다: ${input.id}`);
+    if (!input.id && prev.rowCount) throw new Error(`이미 있는 이름입니다: ${input.name}`);
+    const order = prev.rows[0]?.props?.order ?? 999;
+    await upsertNode(c, id, "curriculum", CURRICULUM_BOOK, { name: input.name, level: input.level, order });
+    await c.query(`DELETE FROM kg.edges WHERE dst = $1 AND type = $2`, [id, EDGE.CATEGORY_HAS]);
+    for (const cat of input.categoryIds) {
+      const ok = await c.query(`SELECT 1 FROM kg.nodes WHERE id = $1 AND type = 'category'`, [cat]);
+      if (!ok.rowCount) throw new Error(`카테고리가 없습니다: ${cat}`);
+      await addEdge(c, cat, id, EDGE.CATEGORY_HAS);
+    }
+    return { id };
+  });
+}
+
+export async function deleteCurriculum(id: string) {
+  await q(`DELETE FROM kg.nodes WHERE id = $1 AND type = 'curriculum'`, [id]);
+}
+
+// 선수 관계 on/off. 순환이 생기면 거부한다.
+export async function setPrereq(src: string, dst: string, on: boolean) {
+  return tx(async (c) => {
+    if (!on) {
+      await c.query(`DELETE FROM kg.edges WHERE src = $1 AND dst = $2 AND type = $3`, [src, dst, EDGE.PREREQ_OF]);
+      return;
+    }
+    if (src === dst) throw new Error("자기 자신을 선수로 둘 수 없습니다.");
+    const both = await c.query(`SELECT COUNT(*)::int AS n FROM kg.nodes WHERE id = ANY($1) AND type = 'curriculum'`, [[src, dst]]);
+    if (both.rows[0].n !== 2) throw new Error("과목 노드가 아닙니다.");
+    const cycle = await c.query(
+      `WITH RECURSIVE r(id) AS (
+         SELECT dst FROM kg.edges WHERE src = $1 AND type = $3
+         UNION SELECT e.dst FROM kg.edges e JOIN r ON e.src = r.id WHERE e.type = $3
+       ) SELECT 1 FROM r WHERE id = $2 LIMIT 1`,
+      [dst, src, EDGE.PREREQ_OF]
+    );
+    if (cycle.rowCount) throw new Error("선수 관계에 순환이 생깁니다.");
+    await addEdge(c, src, dst, EDGE.PREREQ_OF);
+  });
+}
+
+// TOC 항목 ↔ 교육과정·과목 대응
+export async function getMappings(stem: string): Promise<Record<string, string[]>> {
+  const rows = await q<{ key: string; src: string }>(
+    `SELECT t.props->>'key' AS key, e.src FROM kg.edges e JOIN kg.nodes t ON t.id = e.dst
+     WHERE e.type = $1 AND t.book = $2 AND t.type = 'toc'`,
+    [EDGE.MAPS_TO, ids.book(stem)]
+  );
+  const out: Record<string, string[]> = {};
+  for (const r of rows) (out[r.key] ??= []).push(r.src);
+  return out;
+}
+
+export async function setMappings(stem: string, tocKey: string, curriculumIds: string[]) {
+  const tocId = ids.toc(stem, tocKey);
+  await tx(async (c) => {
+    if (!(await c.query(`SELECT 1 FROM kg.nodes WHERE id = $1 AND type = 'toc'`, [tocId])).rowCount) {
+      throw new Error(`TOC 항목이 그래프에 없습니다: ${tocKey}`);
+    }
+    await c.query(`DELETE FROM kg.edges WHERE dst = $1 AND type = $2`, [tocId, EDGE.MAPS_TO]);
+    for (const cur of curriculumIds) {
+      if (!(await c.query(`SELECT 1 FROM kg.nodes WHERE id = $1 AND type = 'curriculum'`, [cur])).rowCount) {
+        throw new Error(`과목 노드가 없습니다: ${cur}`);
+      }
+      await addEdge(c, cur, tocId, EDGE.MAPS_TO);
+    }
+  });
+}
+
+// ---------- 노드 보기 (에이전트 결과 URL 이 여는 내용) ----------
+
+export type NodeView = {
+  id: string;
+  type: string;
+  props: Record<string, unknown>;
+  out: { type: string; id: string; nodeType: string; label: string }[];
+  in: { type: string; id: string; nodeType: string; label: string }[];
+};
+
+const LABEL = `COALESCE(n.props->>'name', n.props->>'label', n.props->>'title',
+  CASE WHEN n.type = 'page' THEN (n.props->>'page') || 'p' END,
+  CASE WHEN n.type = 'paragraph' THEN (n.props->>'kind') || ' #' || ((n.props->>'idx')::int + 1) END, n.id)`;
+
+export async function getNodeView(id: string): Promise<NodeView | null> {
+  const [node] = await q<{ id: string; type: string; props: Record<string, unknown> }>(`SELECT id, type, props FROM kg.nodes WHERE id = $1`, [id]);
+  if (!node) return null;
+  const out = await q<NodeView["out"][number]>(
+    `SELECT e.type, n.id, n.type AS "nodeType", ${LABEL} AS label FROM kg.edges e JOIN kg.nodes n ON n.id = e.dst
+     WHERE e.src = $1 ORDER BY e.type, COALESCE((n.props->>'order')::int, (n.props->>'page')::int, (n.props->>'idx')::int, 0)`,
+    [id]
+  );
+  const inc = await q<NodeView["in"][number]>(
+    `SELECT e.type, n.id, n.type AS "nodeType", ${LABEL} AS label FROM kg.edges e JOIN kg.nodes n ON n.id = e.src
+     WHERE e.dst = $1 ORDER BY e.type, label`,
+    [id]
+  );
+  return { ...node, out, in: inc };
+}
+

@@ -19,7 +19,7 @@ type Props = {
 
 // ocr.html 상단 두 줄: BookToc(작성자별) 목록 + TOC 문서 목록, 각각 페이지네이션
 export default function BookBars({ selectedKey, onSelectBookToc, onSelectDoc, onError }: Props) {
-  const [writer, setWriter] = useState("admin");
+  const [writer, setWriter] = useState(""); // 로그인 사용자 아이디 (서버가 정함)
   const [bookTocs, setBookTocs] = useState<BookTocRow[] | null>(null);
   const [btPage, setBtPage] = useState({ page: 0, totalPages: 1, total: 0 });
   const [btError, setBtError] = useState(false);
@@ -29,11 +29,12 @@ export default function BookBars({ selectedKey, onSelectBookToc, onSelectDoc, on
   const [docError, setDocError] = useState(false);
 
   const loadBookTocs = useCallback(
-    async (page: number, w: string) => {
+    async (page: number) => {
       setBookTocs(null);
       setBtError(false);
       try {
-        const data = await fetchBookTocs(w || "admin", page);
+        const data = await fetchBookTocs(page);
+        setWriter(data.writer);
         setBookTocs(data.content || []);
         setBtPage({ page: data.number ?? page, totalPages: data.totalPages || 1, total: data.totalElements || 0 });
       } catch (e) {
@@ -61,23 +62,11 @@ export default function BookBars({ selectedKey, onSelectBookToc, onSelectDoc, on
   );
 
   useEffect(() => {
-    let w = "admin";
-    try {
-      w = localStorage.getItem("unlimited_ocr_writer") || "admin";
-    } catch {}
-    // localStorage 는 클라이언트에서만 읽을 수 있어 마운트 후 반영한다
+    // 첫 화면에서 목록을 불러온다 (로딩 표시를 위한 상태 초기화 포함)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWriter(w);
-    loadBookTocs(0, w);
+    loadBookTocs(0);
     loadDocs(1);
   }, [loadBookTocs, loadDocs]);
-
-  const changeWriter = (w: string) => {
-    try {
-      localStorage.setItem("unlimited_ocr_writer", w.trim());
-    } catch {}
-    loadBookTocs(0, w.trim());
-  };
 
   return (
     <>
@@ -106,29 +95,25 @@ export default function BookBars({ selectedKey, onSelectBookToc, onSelectDoc, on
         <div className="flex items-center gap-4 shrink-0 font-medium text-xs">
           <div className="flex items-center gap-1">
             <span className="text-gray-400">작성자:</span>
-            <input
-              value={writer}
-              onChange={(e) => setWriter(e.target.value)}
-              onBlur={(e) => changeWriter(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && changeWriter(writer)}
-              className="w-20 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-center text-gray-200 focus:outline-none focus:border-orange-500 transition-colors"
-            />
+            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-200 font-mono" title="로그인한 사용자 아이디">
+              {writer || "-"}
+            </span>
           </div>
           <span className="text-xs text-gray-400 font-medium">
             {btPage.page + 1} / {btPage.totalPages} (총 {btPage.total})
           </span>
           <div className="flex items-center gap-1">
-            <button className={navBtn} title="처음" disabled={btPage.page <= 0} onClick={() => loadBookTocs(0, writer)}>
+            <button className={navBtn} title="처음" disabled={btPage.page <= 0} onClick={() => loadBookTocs(0)}>
               <ChevronsLeft className="w-3.5 h-3.5" />
             </button>
-            <button className={navBtn} title="이전" disabled={btPage.page <= 0} onClick={() => loadBookTocs(btPage.page - 1, writer)}>
+            <button className={navBtn} title="이전" disabled={btPage.page <= 0} onClick={() => loadBookTocs(btPage.page - 1)}>
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <button
               className={navBtn}
               title="다음"
               disabled={btPage.page >= btPage.totalPages - 1}
-              onClick={() => loadBookTocs(btPage.page + 1, writer)}
+              onClick={() => loadBookTocs(btPage.page + 1)}
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -136,7 +121,7 @@ export default function BookBars({ selectedKey, onSelectBookToc, onSelectDoc, on
               className={navBtn}
               title="끝"
               disabled={btPage.page >= btPage.totalPages - 1}
-              onClick={() => loadBookTocs(btPage.totalPages - 1, writer)}
+              onClick={() => loadBookTocs(btPage.totalPages - 1)}
             >
               <ChevronsRight className="w-3.5 h-3.5" />
             </button>
