@@ -1,0 +1,81 @@
+import type { ParagraphKind, TocData, TocNodeInput } from "./types";
+
+const toPage = (v: unknown): number | null => {
+  const n = parseInt(String(v), 10);
+  return isNaN(n) ? null : n;
+};
+
+// 장 → 절 → 항목 순서(문서 순서)로 펼친다. 장의 페이지는 첫 절의 페이지.
+export function flattenToc(toc: TocData | null): TocNodeInput[] {
+  const out: TocNodeInput[] = [];
+  let order = 0;
+  (toc?.chapters || []).forEach((ch, ci) => {
+    const chKey = String(ch.chapterId ?? ci);
+    out.push({
+      key: chKey,
+      parentKey: null,
+      level: "chapter",
+      label: `${ch.chapterId ?? ""} ${ch.chapterTitle ?? ""}`.trim(),
+      page: toPage(ch.sections?.[0]?.page),
+      order: order++,
+    });
+    (ch.sections || []).forEach((sec, si) => {
+      const secKey = `${chKey}/${sec.sectionId ?? si}`;
+      out.push({
+        key: secKey,
+        parentKey: chKey,
+        level: "section",
+        label: `${sec.sectionId ?? ""} ${sec.sectionTitle ?? ""}`.trim(),
+        page: toPage(sec.page),
+        order: order++,
+      });
+      (sec.items || []).forEach((it, ii) => {
+        out.push({
+          key: `${secKey}/${ii}`,
+          parentKey: secKey,
+          level: "item",
+          label: it.name,
+          page: toPage(it.page),
+          order: order++,
+        });
+      });
+    });
+  });
+  return out;
+}
+
+// 현재 페이지가 속한 TOC 항목: 시작 페이지 <= page 인 마지막(가장 깊은) 항목
+export function tocKeyForPage(nodes: TocNodeInput[], page: number): string | null {
+  let found: string | null = null;
+  for (const n of nodes) {
+    if (n.page != null && n.page <= page) found = n.key;
+  }
+  return found;
+}
+
+// OCR JSON 카테고리(13종) → 그래프 문단 종류(5종). null 이면 기본 제외.
+const CATEGORY_TO_KIND: Record<string, ParagraphKind> = {
+  개념: "정의",
+  정의: "정의",
+  공식: "공식",
+  정리: "성질",
+  성질: "성질",
+  예제: "문제",
+  유제: "문제",
+  문제: "문제",
+  해답: "해답",
+  "다른 풀이": "해답",
+};
+
+export function kindForCategory(category: string | undefined): ParagraphKind | null {
+  return CATEGORY_TO_KIND[(category || "").trim()] ?? null;
+}
+
+export function commentaryList(toc: TocData | null): string[] {
+  const v = toc?.commentaryFile ?? toc?.commentary;
+  if (Array.isArray(v)) return v.filter(Boolean);
+  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
+export const stripExt = (s: string) => String(s || "").replace(/\.json$/i, "").replace(/\.pdf$/i, "");
