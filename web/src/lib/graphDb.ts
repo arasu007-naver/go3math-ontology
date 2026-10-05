@@ -331,6 +331,51 @@ export async function setMappings(stem: string, tocKey: string, curriculumIds: s
   });
 }
 
+// ---------- DB 테이블 보기 (/tables) ----------
+
+export const TABLE_PAGE_SIZE = 24;
+
+// DB 의 모든 일반 테이블 ('스키마.테이블')
+export async function listTables(): Promise<string[]> {
+  const rows = await q<{ name: string }>(
+    `SELECT table_schema || '.' || table_name AS name FROM information_schema.tables
+     WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema')
+     ORDER BY table_schema, table_name`
+  );
+  return rows.map((r) => r.name);
+}
+
+// 테이블 한 쪽(24행). 이름은 listTables 에 있는 것만 받는다. 기본 키 순(없으면 물리 순서)으로 자른다.
+export async function getTableRows(name: string, page: number) {
+  if (!(await listTables()).includes(name)) return null;
+  const [schema, table] = name.split(/\.(.*)/);
+  return withReadOnly(async (c) => {
+    const ident = `${c.escapeIdentifier(schema)}.${c.escapeIdentifier(table)}`;
+    const columns = (
+      await c.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
+        [schema, table]
+      )
+    ).rows.map((r) => r.column_name as string);
+    const pk = (
+      await c.query(
+        `SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
+         WHERE i.indrelid = $1::regclass AND i.indisprimary ORDER BY array_position(i.indkey::int2[], a.attnum)`,
+        [ident]
+      )
+    ).rows.map((r) => c.escapeIdentifier(r.attname));
+    const total = (await c.query(`SELECT count(*)::int AS n FROM ${ident}`)).rows[0].n as number;
+    // to_jsonb 로 바꿔 날짜·bytea·jsonb 도 그대로 JSON 으로 보낸다
+    const rows = (
+      await c.query(`SELECT to_jsonb(t) AS r FROM ${ident} t ORDER BY ${pk.length ? pk.map((k) => `t.${k}`).join(", ") : "t.ctid"} LIMIT $1 OFFSET $2`, [
+        TABLE_PAGE_SIZE,
+        (page - 1) * TABLE_PAGE_SIZE,
+      ])
+    ).rows.map((r) => r.r as Record<string, unknown>);
+    return { name, columns, rows, total, page, pageSize: TABLE_PAGE_SIZE };
+  });
+}
+
 // ---------- 노드 보기 (에이전트 결과 URL 이 여는 내용) ----------
 
 export type NodeView = {
