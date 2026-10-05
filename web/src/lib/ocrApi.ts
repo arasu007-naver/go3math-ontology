@@ -1,21 +1,20 @@
-// unlimited-ocr API (next.config.ts 의 /api/ocr/* 프록시 경유)
+// unlimited-ocr API (서버 라우트 /api/ocr/* 경유, 토큰은 서버가 붙인다)
+import { api } from "./api";
 import type { BookTocRow, DocEntry, PageJson, TocData } from "./types";
 
-export class OcrAuthError extends Error {}
-
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`/api/ocr${path}`, { signal, credentials: "include" });
-  if (res.status === 401) throw new OcrAuthError("unlimited-ocr 로그인이 필요합니다.");
+  const res = await api(`/api/ocr${path}`, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
 // BookToc 은 apiv3 를 직접 호출하는 서버 라우트(/api/book-toc) 경유
-export async function fetchBookTocs(writer: string, page: number) {
-  const res = await fetch(`/api/book-toc/by-writer/${encodeURIComponent(writer)}/${page}`);
+// 작성자는 서버가 로그인 사용자 아이디로 정한다
+export async function fetchBookTocs(page: number) {
+  const res = await api(`/api/book-toc/${page}`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data as { content?: BookTocRow[]; number?: number; totalPages?: number; totalElements?: number };
+  return data as { content?: BookTocRow[]; number?: number; totalPages?: number; totalElements?: number; writer: string };
 }
 
 export function fetchDocs(page: number) {
@@ -50,8 +49,7 @@ export async function fetchJsonPages(stem: string, kind: "main" | "commentary") 
 
 // 404 면 null
 export async function fetchPageJson(key: string, signal?: AbortSignal): Promise<PageJson | null> {
-  const res = await fetch(`/api/ocr/get-json?key=${encodeURIComponent(key)}`, { signal, credentials: "include" });
-  if (res.status === 401) throw new OcrAuthError("unlimited-ocr 로그인이 필요합니다.");
+  const res = await api(`/api/ocr/get-json?key=${encodeURIComponent(key)}`, { signal });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();

@@ -64,6 +64,7 @@ export type PageInput = {
   page: number;
   tocKey: string | null;
   jsonKey: string | null;
+  imageUrl: string | null; // 페이지 PNG (MinIO 실제 키 기준 URL)
   paragraphs: ParagraphInput[];
 };
 

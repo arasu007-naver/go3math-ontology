@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import AppHeader from "@/components/AppHeader";
 import BookBars from "@/components/BookBars";
 import GraphForm from "@/components/GraphForm";
 import PreviewColumn, { type JsonState, type PreviewPage } from "@/components/PreviewColumn";
-import { fetchJsonPages, fetchPageJson, fetchPageUrls, fetchToc, jsonStorageKey, OcrAuthError } from "@/lib/ocrApi";
+import { fetchJsonPages, fetchPageJson, fetchPageUrls, fetchToc, jsonStorageKey } from "@/lib/ocrApi";
 import { commentaryList, stripExt } from "@/lib/toc";
 import type { BookTocRow, DocEntry, SelectedBook, TocData } from "@/lib/types";
 
@@ -20,7 +21,6 @@ export default function Home() {
   const [jsonPagesResult, setJsonPagesResult] = useState<{ forKey: string; sets: { main: Set<number>; batch: Set<number> } } | null>(null);
   const [jsonResult, setJsonResult] = useState<{ forKey: string; state: JsonState } | null>(null);
   const [toast, setToast] = useState<Toast>(null);
-  const [authRequired, setAuthRequired] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pushToast = useCallback((msg: string, type: "success" | "error" = "success") => {
@@ -30,10 +30,7 @@ export default function Home() {
   }, []);
 
   const onError = useCallback(
-    (e: unknown) => {
-      if (e instanceof OcrAuthError) setAuthRequired(true);
-      else pushToast(`조회 실패: ${(e as Error).message}`, "error");
-    },
+    (e: unknown) => pushToast(`조회 실패: ${(e as Error).message}`, "error"),
     [pushToast]
   );
 
@@ -136,7 +133,6 @@ export default function Home() {
         done({ status: "missing", key });
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
-        if (e instanceof OcrAuthError) setAuthRequired(true);
         done({ status: "error", message: "데이터를 로드하는 도중 오류가 발생했습니다." });
       }
     }, 150);
@@ -159,34 +155,7 @@ export default function Home() {
 
   return (
     <>
-      <header className="border-b border-white/5 py-4 px-6 flex items-center justify-between shrink-0 glass sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <span className="text-white font-extrabold text-lg">Q</span>
-          </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-              Go3 Math Ontology
-            </h1>
-            <p className="text-[9px] text-gray-500 font-medium">TOC 중심 Knowledge Graph 도서 입력</p>
-          </div>
-        </div>
-      </header>
-
-      {authRequired && (
-        <div className="px-6 py-2 bg-red-500/10 border-b border-red-500/30 text-xs text-red-300 flex items-center gap-2 shrink-0">
-          unlimited-ocr 로그인이 필요합니다.
-          <a
-            href={process.env.NEXT_PUBLIC_OCR_LOGIN_URL || "http://localhost:8088/unauthorized"}
-            target="_blank"
-            rel="noreferrer"
-            className="underline font-bold"
-          >
-            로그인
-          </a>
-          후 새로고침하세요.
-        </div>
-      )}
+      <AppHeader subtitle="TOC 중심 Knowledge Graph 도서 입력" />
 
       <BookBars
         selectedKey={book ? `${book.source}:${book.sourceId}` : null}
@@ -212,7 +181,7 @@ export default function Home() {
           json={json}
           onToast={pushToast}
         />
-        <GraphForm book={book} kind={kind} page={curPage} json={json} onToast={pushToast} />
+        <GraphForm book={book} kind={kind} page={curPage} imageUrl={pages?.[pageIndex]?.url ?? null} json={json} onToast={pushToast} />
       </main>
 
       {toast && (
