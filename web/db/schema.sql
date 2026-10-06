@@ -63,7 +63,13 @@ RETURNS TABLE (id text, level int, ord int, name text, parent text) LANGUAGE sql
     ('L2-GEO-PRE',  2, 1, 'PREREQUISITE', 'L1-GEO')
 $$;
 
--- 노드 필드: id 접두사 = level, name·order 필수, kind 는 L5 만, school·curriculum 은 L3 만
+-- 노드 필드: id 접두사 = level, name·order 필수, kind 는 L5 만, school·curriculum·educationalStep 은 L3 만
+-- educationalStep(교육과정 연도, 정수) 추가 전에 넣은 L3 는 curriculum 의 연도로 채운다
+UPDATE kg.nodes SET props = props || jsonb_build_object('educationalStep', substring(props->>'curriculum' from '^\d{4}')::int)
+WHERE type = 'level' AND props->>'level' = '3' AND NOT props ? 'educationalStep' AND props->>'curriculum' ~ '^\d{4}';
+-- 위 UPDATE 가 쌓은 지연 트리거 검사를 지금 실행해 비운다(쌓인 채로는 아래 ALTER TABLE 이 거부된다). 시드는 다시 지연 모드로 넣는다.
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
 ALTER TABLE kg.nodes DROP CONSTRAINT IF EXISTS nodes_level_check;
 ALTER TABLE kg.nodes ADD CONSTRAINT nodes_level_check CHECK (
   (type = 'level') = (id ~ '^L[1-5]-')
@@ -77,7 +83,9 @@ ALTER TABLE kg.nodes ADD CONSTRAINT nodes_level_check CHECK (
         AND (props->>'level' <> '5' OR props->>'kind' IN ('concept', 'theorem', 'property', 'formula', 'definition'))
         AND (props ? 'school') = (props->>'level' = '3')
         AND (props ? 'curriculum') = (props->>'level' = '3')
-        AND (props->>'level' <> '3' OR (props->>'school' IN ('middle', 'high') AND length(btrim(props->>'curriculum')) > 0)),
+        AND (props ? 'educationalStep') = (props->>'level' = '3')
+        AND (props->>'level' <> '3' OR (props->>'school' IN ('middle', 'high') AND length(btrim(props->>'curriculum')) > 0
+                                         AND jsonb_typeof(props->'educationalStep') = 'number')),
       false))
 );
 

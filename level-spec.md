@@ -11,7 +11,7 @@ Go3 Math ontology의 knowledge graph에서 TOC 그물망의 계층은 "level"로
 | --- | --- | --- | --- |
 | 1 | 영역 | 고정 7개 | 함수 |
 | 2 | PREREQUISITE | 중등 수학까지의 선수 내용. `L1-STUDY`를 뺀 각 Level 1 아래 하나씩 | 함수 / PREREQUISITE |
-| 3 | 과목 | 실제 중·고등 수학 학과목 | 중학 수학 2, 수학 I |
+| 3 | 과목 | 실제 중·고등 수학 학과목. `L1-STUDY` 아래는 고정 4과목 | 중학 수학 2, 수학 I, 문제 해결 전략 |
 | 4 | 대단원 | 과목의 대단원 | 일차함수 |
 | 5 | 소단원 | 개념, 정리, 성질, 공식 등 | 일차함수의 기울기 |
 
@@ -31,7 +31,7 @@ L1 함수 (L1-FUNC)
 
 | 순서 | 코드 | 이름 | 범위 |
 | --- | --- | --- | --- |
-| 1 | `L1-STUDY` | 수학 학습 | 교습법, 학습법, 교육과정 정보, 과목 연계(선수 관계) 등 수학 외적 메타 |
+| 1 | `L1-STUDY` | 수학 학습 | 문제 해결 전략, 교육과정, 학습법, 교습법 (수학 내용이 아닌 영역) |
 | 2 | `L1-NUM` | 수와 연산 | 수 체계, 수의 연산 |
 | 3 | `L1-EXPR` | 식과 계산 | 문자와 식, 다항식, 인수분해 등 |
 | 4 | `L1-EQ` | 방정식과 부등식 | 방정식, 부등식, 연립 |
@@ -41,7 +41,7 @@ L1 함수 (L1-FUNC)
 
 - 이 일곱은 고정이다. 추가, 삭제, 이름·순서 변경은 이 문서를 고쳐야만 한다. 데이터 입력, API, UI로 바꿀 수 없다.
 - 코드는 안정 식별자이고, 이름은 표시용이다.
-- `L1-STUDY`는 수학 내용이 아닌 메타 영역이다. Level 2~5 수학 계층을 두지 않는다. 교습법, 학습법, 교육과정 정보, 과목 선수 관계 설명 문서 노드만 붙인다.
+- `L1-STUDY`는 수학 내용 영역이 아니다. Level 2(PREREQUISITE)를 두지 않고, 고정 과목 네 개를 Level 3으로 바로 둔다. 아래 "Level 3: 수학 학습 과목"을 따른다.
 
 ## Level 2: PREREQUISITE (고정, 6개)
 
@@ -59,11 +59,28 @@ L1 함수 (L1-FUNC)
 - Level 1처럼 시드로 넣고 고정한다.
 - PREREQUISITE 아래 Level 3에는 중등까지의 과목(중학 수학 1, 2, 3 등)만 둔다.
 
+## Level 3: 수학 학습 과목 (고정, 4개)
+
+`L1-STUDY` 바로 아래에 다음 네 과목을 Level 3으로 둔다. Level 1처럼 시드로 넣고 고정한다.
+
+| 순서 | 코드 | 이름 | 범위 |
+| --- | --- | --- | --- |
+| 1 | `L3-STUDY-PSS` | 문제 해결 전략 | 불변성의 원리, 게임 이론, 비둘기집 원리 같은 영역을 가로지르는 풀이 전략. 수학 독본, PSS(Problem Solving Strategies) 등 |
+| 2 | `L3-STUDY-CURR` | 교육과정 | 대한민국 수학 교육과정 정보, 과목 구성과 과목 사이 연계(선수 관계) 설명 |
+| 3 | `L3-STUDY-LEARN` | 학습법 | 학생의 수학 공부 방법 |
+| 4 | `L3-STUDY-TEACH` | 교습법 | 가르치는 방법 |
+
+- 이 네 과목 아래에도 Level 4(대단원), Level 5(소단원)를 둔다. 실제 목록은 교재 TOC(수학 독본, PSS 등)나 자료에서 입력하고, 구현 중 지어내지 않는다.
+- 이 과목과 그 하위 노드는 `BELONGS_TO_AREA`로 `L1-STUDY`에만 속한다. 수학 영역(`L1-NUM` 등)에 소속시키지 않는다.
+- 전략이 실제로 쓰이는 수학 단원과는 `APPLIES_TO`로 잇는다. 예: 문제 해결 전략 / 불변성의 원리 → 경우의 수 대단원, 정수 성질 소단원.
+- 교육과정 아래 노드는 `DESCRIBES`로 수학 과목과 선수 관계를 설명할 수 있다.
+
 ## Level 3: 과목
 
 실제 중·고등 수학 학과목이다.
 
 - 중등 과목은 해당 Level 1의 PREREQUISITE(Level 2) 아래에 둔다.
+- `L1-STUDY` 아래 과목은 위 고정 4과목만 둔다.
 - 고등(대입 대비) 과목은 Level 1 바로 아래, PREREQUISITE와 같은 단계 옆에 Level 3으로 둔다. 고등 과목에는 Level 2 중간 노드를 만들지 않는다.
 - 한 과목은 여러 Level 1에 걸칠 수 있다. 예를 들어 중학 수학 2는 `L2-EXPR-PRE`, `L2-EQ-PRE`, `L2-FUNC-PRE`, `L2-GEO-PRE` 아래 모두에 속할 수 있다. 과목 노드는 하나만 만들고 소속 관계를 여러 개 둔다.
 - 과목 사이의 선수 관계는 이 레벨에서 잇는다. 예: 중학 수학 3 → 수학(고1) → 수학 I.
@@ -81,7 +98,10 @@ L1 함수 (L1-FUNC)
 개념, 정리, 성질, 공식 등 가장 작은 지식 단위다.
 
 - 정확히 하나의 Level 4 대단원에 속한다.
-- 종류(`kind`)를 반드시 가진다: `concept`(개념), `theorem`(정리), `property`(성질), `formula`(공식), `definition`(정의). 이 다섯 외의 값은 이 문서를 고쳐야만 추가한다.
+- 종류(`kind`)를 반드시 가진다.
+  - 수학 영역 아래: `concept`(개념), `theorem`(정리), `property`(성질), `formula`(공식), `definition`(정의)
+  - `L1-STUDY` 아래: `strategy`(문제 해결 전략), `method`(학습법·교습법), `info`(교육과정 정보)
+  - 이 외의 값은 이 문서를 고쳐야만 추가한다.
 - 소단원 사이의 선수 관계를 둘 수 있다.
 - 교재 TOC 항목과 문단(unlimited-ocr JSON)은 Level 5(필요하면 Level 4)에 대응 관계로 붙인다. 교재 노드는 level 계층이 아니다.
 
@@ -89,17 +109,18 @@ L1 함수 (L1-FUNC)
 
 | 관계 | 시작 | 끝 | 설명 |
 | --- | --- | --- | --- |
-| `HAS_CHILD` | 상위 level 노드 | 하위 level 노드 | 계층. L1→L2, L1→L3(고등), L2→L3(중등), L3→L4, L4→L5 |
+| `HAS_CHILD` | 상위 level 노드 | 하위 level 노드 | 계층. L1→L2, L1→L3(고등, 수학 학습 과목), L2→L3(중등), L3→L4, L4→L5 |
 | `BELONGS_TO_AREA` | L3, L4 | L1 | 과목·대단원의 영역 소속. 여러 개 가능 |
 | `PREREQUISITE_OF` | L3/L4/L5 | 같은 또는 상위 단계 노드 | 선수 관계. A가 B의 선수 |
 | `MAPS_TO` | 교재 TOC 항목, 문단 | L4, L5 | 교재 내용 대응 |
-| `DESCRIBES` | `L1-STUDY` 아래 문서 노드 | 과목·선수 관계 | 메타 설명 |
+| `APPLIES_TO` | `L1-STUDY` 아래 L4, L5 | 수학 영역의 L3, L4, L5 | 전략·방법이 쓰이는 단원 |
+| `DESCRIBES` | `L3-STUDY-CURR` 아래 노드 | 과목·선수 관계 | 교육과정 설명 |
 
 규칙:
 
 - Level 1 노드 사이, Level 2 노드 사이에는 `PREREQUISITE_OF`를 두지 않는다.
 - `PREREQUISITE_OF`에 순환이 있으면 안 된다. 입력 시 검사해 거부한다.
-- `HAS_CHILD`는 level이 정확히 한 단계(L1→L3 고등 과목은 예외) 내려가야 한다.
+- `HAS_CHILD`는 level이 정확히 한 단계(L1→L3 고등 과목과 수학 학습 과목은 예외) 내려가야 한다.
 
 ## 노드 필드
 
@@ -111,13 +132,14 @@ L1 함수 (L1-FUNC)
 | `level` | 예 | 1~5 |
 | `name` | 예 | 표시 이름 |
 | `order` | 예 | 같은 부모 아래 표시 순서 |
-| `kind` | L5만 | 위 다섯 값 중 하나 |
-| `school` | L3만 | `middle` 또는 `high` |
+| `kind` | L5만 | Level 5에 정한 값 중 하나 |
+| `school` | L3 수학 과목만 | `middle` 또는 `high` |
 | `curriculum` | L3만 | 교육과정 판(예: 2022 개정) |
+| `educationalStep` | L3만 | 교육과정 연도(정수, 예: 2022). 과목이 어느 교육과정 기준인지 기록한다 |
 
 ## 시드 데이터
 
-서비스 시작 시 Level 1 일곱 개와 Level 2 여섯 개를 넣는다. 없으면 만들고, 있으면 그대로 둔다.
+서비스 시작 시 Level 1 일곱 개, Level 2 여섯 개, 수학 학습 과목 네 개를 넣는다. 없으면 만들고, 있으면 그대로 둔다.
 
 ```json
 [
@@ -133,11 +155,15 @@ L1 함수 (L1-FUNC)
   {"id": "L2-EQ-PRE",   "level": 2, "order": 1, "name": "PREREQUISITE", "parent": "L1-EQ"},
   {"id": "L2-FUNC-PRE", "level": 2, "order": 1, "name": "PREREQUISITE", "parent": "L1-FUNC"},
   {"id": "L2-PROB-PRE", "level": 2, "order": 1, "name": "PREREQUISITE", "parent": "L1-PROB"},
-  {"id": "L2-GEO-PRE",  "level": 2, "order": 1, "name": "PREREQUISITE", "parent": "L1-GEO"}
+  {"id": "L2-GEO-PRE",  "level": 2, "order": 1, "name": "PREREQUISITE", "parent": "L1-GEO"},
+  {"id": "L3-STUDY-PSS",   "level": 3, "order": 1, "name": "문제 해결 전략", "parent": "L1-STUDY"},
+  {"id": "L3-STUDY-CURR",  "level": 3, "order": 2, "name": "교육과정",       "parent": "L1-STUDY"},
+  {"id": "L3-STUDY-LEARN", "level": 3, "order": 3, "name": "학습법",         "parent": "L1-STUDY"},
+  {"id": "L3-STUDY-TEACH", "level": 3, "order": 4, "name": "교습법",         "parent": "L1-STUDY"}
 ]
 ```
 
-Level 3 이하의 실제 과목·단원 목록은 이 문서에서 만들지 않는다. 교육과정 자료나 교재 TOC에서 입력한다. 구현 중 임의로 지어내지 않는다.
+위 시드 외의 Level 3 이하 과목·단원 목록은 이 문서에서 만들지 않는다. 교육과정 자료나 교재 TOC에서 입력한다. 구현 중 임의로 지어내지 않는다.
 
 ## 시각화
 
@@ -155,8 +181,9 @@ Level 3 이하의 실제 과목·단원 목록은 이 문서에서 만들지 않
 ## 완료 기준
 
 - 그래프에 Level 1이 정확히 7개, Level 2 PREREQUISITE가 정확히 6개, 위 코드와 이름대로 있다
-- `L1-STUDY` 아래에는 Level 2~5 수학 노드가 없다
-- Level 1, 2를 바꾸는 입력·API가 없다
+- `L1-STUDY` 아래에는 Level 2가 없고, Level 3은 고정 4과목(문제 해결 전략, 교육과정, 학습법, 교습법)뿐이다
+- `L1-STUDY` 아래 L5의 `kind`는 `strategy`, `method`, `info` 중 하나이고, 수학 영역에는 `BELONGS_TO_AREA`로 속하지 않는다
+- Level 1, 2와 수학 학습 고정 과목을 바꾸는 입력·API가 없다
 - 모든 L3는 L2(중등) 또는 L1(고등) 아래에, 모든 L4는 하나의 L3 아래에, 모든 L5는 하나의 L4 아래에 있다
 - 모든 L5에 허용된 `kind`가 있다
 - `PREREQUISITE_OF`에 순환이 없고, 순환을 만드는 입력은 거부된다

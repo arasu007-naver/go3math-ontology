@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start -p 3310",
     "lint": "eslint",
-    "db:setup": "node --env-file-if-exists=.env.local scripts/db-setup.mjs"
+    "db:setup": "node --env-file-if-exists=.env.local scripts/db-setup.mjs",
+    "db:import-middle": "node --env-file-if-exists=.env.local scripts/db-import-levels.mjs db/level-middle.json",
+    "db:import-high": "node --env-file-if-exists=.env.local scripts/db-import-levels.mjs db/level-high.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
