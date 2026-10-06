@@ -1,5 +1,5 @@
 {
-  "_note": "resources/viaedu-junghak1-to-giha.json 의 고등 과목을 Level 3 과목(고등)으로 넣는다. 고등 과목은 PREREQUISITE 없이 areas 의 Level 1 바로 아래에 둔다. areaBasis = 영역 판단 근거(그 영역에 해당하는 단원). 대단원(Level 4)은 아직 넣지 않는다.",
+  "_note": "resources/viaedu-junghak1-to-giha.json 의 고등 과목을 Level 3 과목(고등), 그 단원을 Level 4 대단원으로 넣는다. 고등 과목은 PREREQUISITE 없이 areas 의 Level 1 바로 아래에 둔다. 대단원 area = 대단원이 속하는 Level 1 (판단값, 고쳐서 다시 넣을 수 있다).",
   "source": "resources/viaedu-junghak1-to-giha.json (비아에듀 초·중·고 수학 개념연결 지도, 최신 개정 교육과정)",
   "subjects": [
     {
@@ -16,25 +16,62 @@
         "L1-NUM",
         "L1-PROB"
       ],
-      "areaBasis": {
-        "L1-EXPR": [
-          "다항식의 연산",
-          "나머지정리와 인수분해"
-        ],
-        "L1-EQ": [
-          "복소수와 이차방정식",
-          "이차방정식과 이차함수",
-          "여러 가지 방정식",
-          "여러 가지 부등식"
-        ],
-        "L1-NUM": [
-          "행렬"
-        ],
-        "L1-PROB": [
-          "합의 법칙과 곱의 법칙",
-          "순열과 조합"
-        ]
-      }
+      "units": [
+        {
+          "id": "L4-HCM1-01",
+          "name": "다항식의 연산",
+          "order": 1,
+          "area": "L1-EXPR"
+        },
+        {
+          "id": "L4-HCM1-02",
+          "name": "나머지정리와 인수분해",
+          "order": 2,
+          "area": "L1-EXPR"
+        },
+        {
+          "id": "L4-HCM1-03",
+          "name": "복소수와 이차방정식",
+          "order": 3,
+          "area": "L1-EQ"
+        },
+        {
+          "id": "L4-HCM1-04",
+          "name": "이차방정식과 이차함수",
+          "order": 4,
+          "area": "L1-EQ"
+        },
+        {
+          "id": "L4-HCM1-05",
+          "name": "여러 가지 방정식",
+          "order": 5,
+          "area": "L1-EQ"
+        },
+        {
+          "id": "L4-HCM1-06",
+          "name": "여러 가지 부등식",
+          "order": 6,
+          "area": "L1-EQ"
+        },
+        {
+          "id": "L4-HCM1-07",
+          "name": "행렬",
+          "order": 7,
+          "area": "L1-NUM"
+        },
+        {
+          "id": "L4-HCM1-08",
+          "name": "합의 법칙과 곱의 법칙",
+          "order": 8,
+          "area": "L1-PROB"
+        },
+        {
+          "id": "L4-HCM1-09",
+          "name": "순열과 조합",
+          "order": 9,
+          "area": "L1-PROB"
+        }
+      ]
     },
     {
       "id": "L3-HIGH-CM2",
@@ -48,20 +85,56 @@
         "L1-FUNC",
         "L1-GEO"
       ],
-      "areaBasis": {
-        "L1-FUNC": [
-          "집합",
-          "명제",
-          "함수와 그래프",
-          "유리함수와 무리함수"
-        ],
-        "L1-GEO": [
-          "평면좌표",
-          "직선의 방정식",
-          "원의 방정식",
-          "도형의 이동"
-        ]
-      }
+      "units": [
+        {
+          "id": "L4-HCM2-01",
+          "name": "집합",
+          "order": 1,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCM2-02",
+          "name": "명제",
+          "order": 2,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCM2-03",
+          "name": "함수와 그래프",
+          "order": 3,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCM2-04",
+          "name": "유리함수와 무리함수",
+          "order": 4,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCM2-05",
+          "name": "평면좌표",
+          "order": 5,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HCM2-06",
+          "name": "직선의 방정식",
+          "order": 6,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HCM2-07",
+          "name": "원의 방정식",
+          "order": 7,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HCM2-08",
+          "name": "도형의 이동",
+          "order": 8,
+          "area": "L1-GEO"
+        }
+      ]
     },
     {
       "id": "L3-HIGH-ALG",
@@ -75,20 +148,56 @@
         "L1-NUM",
         "L1-FUNC"
       ],
-      "areaBasis": {
-        "L1-NUM": [
-          "지수",
-          "로그"
-        ],
-        "L1-FUNC": [
-          "지수함수와 로그함수",
-          "삼각함수",
-          "삼각함수의 활용",
-          "등차수열과 등비수열",
-          "수열의 합",
-          "수학적 귀납법"
-        ]
-      }
+      "units": [
+        {
+          "id": "L4-HALG-01",
+          "name": "지수",
+          "order": 1,
+          "area": "L1-NUM"
+        },
+        {
+          "id": "L4-HALG-02",
+          "name": "로그",
+          "order": 2,
+          "area": "L1-NUM"
+        },
+        {
+          "id": "L4-HALG-03",
+          "name": "지수함수와 로그함수",
+          "order": 3,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HALG-04",
+          "name": "삼각함수",
+          "order": 4,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HALG-05",
+          "name": "삼각함수의 활용",
+          "order": 5,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HALG-06",
+          "name": "등차수열과 등비수열",
+          "order": 6,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HALG-07",
+          "name": "수열의 합",
+          "order": 7,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HALG-08",
+          "name": "수학적 귀납법",
+          "order": 8,
+          "area": "L1-FUNC"
+        }
+      ]
     },
     {
       "id": "L3-HIGH-CAL1",
@@ -101,17 +210,50 @@
       "areas": [
         "L1-FUNC"
       ],
-      "areaBasis": {
-        "L1-FUNC": [
-          "함수의 극한",
-          "함수의 연속",
-          "미분계수와 도함수",
-          "도함수의 활용",
-          "부정적분",
-          "정적분",
-          "정적분의 활용"
-        ]
-      }
+      "units": [
+        {
+          "id": "L4-HCAL1-01",
+          "name": "함수의 극한",
+          "order": 1,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL1-02",
+          "name": "함수의 연속",
+          "order": 2,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL1-03",
+          "name": "미분계수와 도함수",
+          "order": 3,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL1-04",
+          "name": "도함수의 활용",
+          "order": 4,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL1-05",
+          "name": "부정적분",
+          "order": 5,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL1-06",
+          "name": "정적분",
+          "order": 6,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL1-07",
+          "name": "정적분의 활용",
+          "order": 7,
+          "area": "L1-FUNC"
+        }
+      ]
     },
     {
       "id": "L3-HIGH-PS",
@@ -124,16 +266,44 @@
       "areas": [
         "L1-PROB"
       ],
-      "areaBasis": {
-        "L1-PROB": [
-          "순열과 조합",
-          "이항정리",
-          "확률의 개념과 활용",
-          "조건부확률",
-          "확률분포",
-          "통계적 추정"
-        ]
-      }
+      "units": [
+        {
+          "id": "L4-HPS-01",
+          "name": "순열과 조합",
+          "order": 1,
+          "area": "L1-PROB"
+        },
+        {
+          "id": "L4-HPS-02",
+          "name": "이항정리",
+          "order": 2,
+          "area": "L1-PROB"
+        },
+        {
+          "id": "L4-HPS-03",
+          "name": "확률의 개념과 활용",
+          "order": 3,
+          "area": "L1-PROB"
+        },
+        {
+          "id": "L4-HPS-04",
+          "name": "조건부확률",
+          "order": 4,
+          "area": "L1-PROB"
+        },
+        {
+          "id": "L4-HPS-05",
+          "name": "확률분포",
+          "order": 5,
+          "area": "L1-PROB"
+        },
+        {
+          "id": "L4-HPS-06",
+          "name": "통계적 추정",
+          "order": 6,
+          "area": "L1-PROB"
+        }
+      ]
     },
     {
       "id": "L3-HIGH-CAL2",
@@ -146,18 +316,56 @@
       "areas": [
         "L1-FUNC"
       ],
-      "areaBasis": {
-        "L1-FUNC": [
-          "수열의 극한",
-          "급수",
-          "지수함수와 로그함수의 미분",
-          "삼각함수의 미분",
-          "여러 가지 미분법",
-          "도함수의 활용",
-          "여러 가지 함수의 적분법",
-          "정적분의 활용"
-        ]
-      }
+      "units": [
+        {
+          "id": "L4-HCAL2-01",
+          "name": "수열의 극한",
+          "order": 1,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL2-02",
+          "name": "급수",
+          "order": 2,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL2-03",
+          "name": "지수함수와 로그함수의 미분",
+          "order": 3,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL2-04",
+          "name": "삼각함수의 미분",
+          "order": 4,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL2-05",
+          "name": "여러 가지 미분법",
+          "order": 5,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL2-06",
+          "name": "도함수의 활용",
+          "order": 6,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL2-07",
+          "name": "여러 가지 함수의 적분법",
+          "order": 7,
+          "area": "L1-FUNC"
+        },
+        {
+          "id": "L4-HCAL2-08",
+          "name": "정적분의 활용",
+          "order": 8,
+          "area": "L1-FUNC"
+        }
+      ]
     },
     {
       "id": "L3-HIGH-GEO",
@@ -170,16 +378,44 @@
       "areas": [
         "L1-GEO"
       ],
-      "areaBasis": {
-        "L1-GEO": [
-          "벡터의 연산",
-          "벡터의 성분과 내적",
-          "도형의 방정식",
-          "이차곡선",
-          "공간도형",
-          "공간좌표"
-        ]
-      }
+      "units": [
+        {
+          "id": "L4-HGEO-01",
+          "name": "벡터의 연산",
+          "order": 1,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HGEO-02",
+          "name": "벡터의 성분과 내적",
+          "order": 2,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HGEO-03",
+          "name": "도형의 방정식",
+          "order": 3,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HGEO-04",
+          "name": "이차곡선",
+          "order": 4,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HGEO-05",
+          "name": "공간도형",
+          "order": 5,
+          "area": "L1-GEO"
+        },
+        {
+          "id": "L4-HGEO-06",
+          "name": "공간좌표",
+          "order": 6,
+          "area": "L1-GEO"
+        }
+      ]
     }
   ]
 }
