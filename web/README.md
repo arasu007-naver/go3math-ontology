@@ -18,6 +18,7 @@ npm install
 npm run db:setup             # kg 스키마 + 7개 카테고리·과목 초기값 (여러 번 실행해도 안전)
 npm run db:import-middle     # 중등 과목(L3)·대단원(L4): db/level-middle.json → 해당 영역 PREREQUISITE(L2) 아래
 npm run db:import-high       # 고등 과목(L3): db/level-high.json → 해당 영역 Level 1 바로 아래 (과목에 educationalStep=교육과정 연도)
+npm run db:import-prereq     # 대단원(L4) 선수 관계: db/level-prereq.json → PREREQUISITE_OF (개념연결 지도 화살표)
 npm run dev                  # http://localhost:3310 (3000·3001 은 다른 서비스가 사용 중)
 ```
 
