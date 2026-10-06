@@ -331,6 +331,48 @@ export async function setMappings(stem: string, tocKey: string, curriculumIds: s
   });
 }
 
+// ---------- Level 그물 (/network, level-spec.md) ----------
+
+// areas = BELONGS_TO_AREA 로 소속된 Level 1 (Level 1 순서), mapCount = 이 노드에 대응된 교재 TOC·문단 수
+export type LevelNode = {
+  id: string;
+  level: number;
+  name: string;
+  order: number;
+  category: string | null;
+  grade: number | null;
+  school: string | null;
+  kind: string | null;
+  areas: string[];
+  mapCount: number;
+};
+export type LevelEdge = { src: string; dst: string; type: "HAS_CHILD" | "PREREQUISITE_OF" };
+
+export async function getLevelNetwork(): Promise<{ nodes: LevelNode[]; edges: LevelEdge[] }> {
+  const nodes = await q<LevelNode>(
+    `SELECT n.id, (n.props->>'level')::int AS level, n.props->>'name' AS name, (n.props->>'order')::int AS "order",
+            n.props->>'category' AS category, (n.props->>'grade')::int AS grade,
+            n.props->>'school' AS school, n.props->>'kind' AS kind,
+            ARRAY(SELECT a.dst FROM kg.edges a JOIN kg.nodes l ON l.id = a.dst
+                  WHERE a.src = n.id AND a.type = 'BELONGS_TO_AREA' ORDER BY (l.props->>'order')::int) AS areas,
+            (SELECT COUNT(*)::int FROM kg.edges m WHERE m.dst = n.id AND m.type = 'MAPS_TO') AS "mapCount"
+     FROM kg.nodes n WHERE n.type = 'level'
+     ORDER BY level, n.props->>'category' = '과목', "order", n.id`
+    // 같은 PREREQUISITE 아래에서는 중등 대단원 다음 고등 과목
+  );
+  const edges = await q<LevelEdge>(
+    `SELECT src, dst, type FROM kg.edges
+     WHERE type IN ('HAS_CHILD', 'PREREQUISITE_OF') AND src ~ '^L[1-5]-' AND dst ~ '^L[1-5]-'`
+  );
+  return { nodes, edges };
+}
+
+// 선수 관계 on/off. 단계 규칙과 순환은 DB 트리거가 검사해 거부한다.
+export async function setLevelPrereq(src: string, dst: string, on: boolean) {
+  if (on) await q(`INSERT INTO kg.edges (src, dst, type) VALUES ($1, $2, 'PREREQUISITE_OF') ON CONFLICT DO NOTHING`, [src, dst]);
+  else await q(`DELETE FROM kg.edges WHERE src = $1 AND dst = $2 AND type = 'PREREQUISITE_OF'`, [src, dst]);
+}
+
 // ---------- DB 테이블 보기 (/tables) ----------
 
 export const TABLE_PAGE_SIZE = 24;
