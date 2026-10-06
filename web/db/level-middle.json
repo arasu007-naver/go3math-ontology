@@ -1,243 +1,245 @@
 {
-  "_note": "resources/viaedu-junghak1-to-giha.json 의 중학1·2·3 단원을 Level 3 과목(중등) / Level 4 대단원으로 넣는다. area = 대단원이 속하는 Level 1 (판단값, 고쳐서 다시 넣을 수 있다). 과목은 단원 영역들의 PREREQUISITE(L2) 아래에 둔다.",
+  "_note": "resources/viaedu-junghak1-to-giha.json 의 중학1·2·3 단원을 중등 대단원(Level 3, category 대단원)으로 넣는다. PREREQUISITE(L2) 자체가 중학 수학 1·2·3 이므로 과목 노드는 만들지 않고, 대단원을 area(Level 1, 판단값)의 PREREQUISITE 바로 아래에 둔다. grade = 학년, order = 같은 PREREQUISITE 안에서 학년·단원 순서.",
   "source": "resources/viaedu-junghak1-to-giha.json (비아에듀 초·중·고 수학 개념연결 지도, 최신 개정 교육과정)",
-  "subjects": [
+  "curriculum": "2022 개정",
+  "units": [
     {
-      "id": "L3-MID-1",
-      "name": "중학 수학 1",
+      "id": "L3-MID1-01",
+      "name": "소인수분해",
       "order": 1,
-      "school": "middle",
-      "curriculum": "2022 개정",
-      "educationalStep": 2022,
-      "sourceKey": "중학1",
-      "units": [
-        {
-          "id": "L4-MID1-01",
-          "name": "소인수분해",
-          "order": 1,
-          "area": "L1-NUM"
-        },
-        {
-          "id": "L4-MID1-02",
-          "name": "정수와 유리수",
-          "order": 2,
-          "area": "L1-NUM"
-        },
-        {
-          "id": "L4-MID1-03",
-          "name": "문자의 사용과 식의 계산",
-          "order": 3,
-          "area": "L1-EXPR"
-        },
-        {
-          "id": "L4-MID1-04",
-          "name": "일차방정식",
-          "order": 4,
-          "area": "L1-EQ"
-        },
-        {
-          "id": "L4-MID1-05",
-          "name": "좌표평면과 그래프",
-          "order": 5,
-          "area": "L1-FUNC"
-        },
-        {
-          "id": "L4-MID1-06",
-          "name": "기본 도형",
-          "order": 6,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID1-07",
-          "name": "작도와 합동",
-          "order": 7,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID1-08",
-          "name": "평면도형",
-          "order": 8,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID1-09",
-          "name": "입체도형",
-          "order": 9,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID1-10",
-          "name": "자료의 정리와 해석",
-          "order": 10,
-          "area": "L1-PROB"
-        },
-        {
-          "id": "L4-MID1-11",
-          "name": "대푯값",
-          "order": 11,
-          "area": "L1-PROB"
-        }
-      ]
+      "grade": 1,
+      "area": "L1-NUM"
     },
     {
-      "id": "L3-MID-2",
-      "name": "중학 수학 2",
+      "id": "L3-MID1-02",
+      "name": "정수와 유리수",
       "order": 2,
-      "school": "middle",
-      "curriculum": "2022 개정",
-      "educationalStep": 2022,
-      "sourceKey": "중학2",
-      "units": [
-        {
-          "id": "L4-MID2-01",
-          "name": "유리수와 순환소수",
-          "order": 1,
-          "area": "L1-NUM"
-        },
-        {
-          "id": "L4-MID2-02",
-          "name": "식의 계산",
-          "order": 2,
-          "area": "L1-EXPR"
-        },
-        {
-          "id": "L4-MID2-03",
-          "name": "부등식",
-          "order": 3,
-          "area": "L1-EQ"
-        },
-        {
-          "id": "L4-MID2-04",
-          "name": "연립일차방정식",
-          "order": 4,
-          "area": "L1-EQ"
-        },
-        {
-          "id": "L4-MID2-05",
-          "name": "일차함수와 그래프",
-          "order": 5,
-          "area": "L1-FUNC"
-        },
-        {
-          "id": "L4-MID2-06",
-          "name": "일차함수와 일차방정식",
-          "order": 6,
-          "area": "L1-FUNC"
-        },
-        {
-          "id": "L4-MID2-07",
-          "name": "삼각형의 성질",
-          "order": 7,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID2-08",
-          "name": "사각형의 성질",
-          "order": 8,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID2-09",
-          "name": "도형의 닮음",
-          "order": 9,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID2-10",
-          "name": "피타고라스 정리",
-          "order": 10,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID2-11",
-          "name": "경우의 수",
-          "order": 11,
-          "area": "L1-PROB"
-        },
-        {
-          "id": "L4-MID2-12",
-          "name": "확률의 계산",
-          "order": 12,
-          "area": "L1-PROB"
-        }
-      ]
+      "grade": 1,
+      "area": "L1-NUM"
     },
     {
-      "id": "L3-MID-3",
-      "name": "중학 수학 3",
+      "id": "L3-MID1-03",
+      "name": "문자의 사용과 식의 계산",
+      "order": 1,
+      "grade": 1,
+      "area": "L1-EXPR"
+    },
+    {
+      "id": "L3-MID1-04",
+      "name": "일차방정식",
+      "order": 1,
+      "grade": 1,
+      "area": "L1-EQ"
+    },
+    {
+      "id": "L3-MID1-05",
+      "name": "좌표평면과 그래프",
+      "order": 1,
+      "grade": 1,
+      "area": "L1-FUNC"
+    },
+    {
+      "id": "L3-MID1-06",
+      "name": "기본 도형",
+      "order": 1,
+      "grade": 1,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID1-07",
+      "name": "작도와 합동",
+      "order": 2,
+      "grade": 1,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID1-08",
+      "name": "평면도형",
       "order": 3,
-      "school": "middle",
-      "curriculum": "2022 개정",
-      "educationalStep": 2022,
-      "sourceKey": "중학3",
-      "units": [
-        {
-          "id": "L4-MID3-01",
-          "name": "제곱근과 실수",
-          "order": 1,
-          "area": "L1-NUM"
-        },
-        {
-          "id": "L4-MID3-02",
-          "name": "근호를 포함한 식의 계산",
-          "order": 2,
-          "area": "L1-NUM"
-        },
-        {
-          "id": "L4-MID3-03",
-          "name": "다항식의 곱셈과 인수분해",
-          "order": 3,
-          "area": "L1-EXPR"
-        },
-        {
-          "id": "L4-MID3-04",
-          "name": "이차방정식",
-          "order": 4,
-          "area": "L1-EQ"
-        },
-        {
-          "id": "L4-MID3-05",
-          "name": "이차함수와 그래프",
-          "order": 5,
-          "area": "L1-FUNC"
-        },
-        {
-          "id": "L4-MID3-06",
-          "name": "이차함수의 그래프의 성질",
-          "order": 6,
-          "area": "L1-FUNC"
-        },
-        {
-          "id": "L4-MID3-07",
-          "name": "삼각비",
-          "order": 7,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID3-08",
-          "name": "삼각비의 활용",
-          "order": 8,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID3-09",
-          "name": "원의 성질",
-          "order": 9,
-          "area": "L1-GEO"
-        },
-        {
-          "id": "L4-MID3-10",
-          "name": "산포도",
-          "order": 10,
-          "area": "L1-PROB"
-        },
-        {
-          "id": "L4-MID3-11",
-          "name": "상자그림과 산점도",
-          "order": 11,
-          "area": "L1-PROB"
-        }
-      ]
+      "grade": 1,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID1-09",
+      "name": "입체도형",
+      "order": 4,
+      "grade": 1,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID1-10",
+      "name": "자료의 정리와 해석",
+      "order": 1,
+      "grade": 1,
+      "area": "L1-PROB"
+    },
+    {
+      "id": "L3-MID1-11",
+      "name": "대푯값",
+      "order": 2,
+      "grade": 1,
+      "area": "L1-PROB"
+    },
+    {
+      "id": "L3-MID2-01",
+      "name": "유리수와 순환소수",
+      "order": 3,
+      "grade": 2,
+      "area": "L1-NUM"
+    },
+    {
+      "id": "L3-MID2-02",
+      "name": "식의 계산",
+      "order": 2,
+      "grade": 2,
+      "area": "L1-EXPR"
+    },
+    {
+      "id": "L3-MID2-03",
+      "name": "부등식",
+      "order": 2,
+      "grade": 2,
+      "area": "L1-EQ"
+    },
+    {
+      "id": "L3-MID2-04",
+      "name": "연립일차방정식",
+      "order": 3,
+      "grade": 2,
+      "area": "L1-EQ"
+    },
+    {
+      "id": "L3-MID2-05",
+      "name": "일차함수와 그래프",
+      "order": 2,
+      "grade": 2,
+      "area": "L1-FUNC"
+    },
+    {
+      "id": "L3-MID2-06",
+      "name": "일차함수와 일차방정식",
+      "order": 3,
+      "grade": 2,
+      "area": "L1-FUNC"
+    },
+    {
+      "id": "L3-MID2-07",
+      "name": "삼각형의 성질",
+      "order": 5,
+      "grade": 2,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID2-08",
+      "name": "사각형의 성질",
+      "order": 6,
+      "grade": 2,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID2-09",
+      "name": "도형의 닮음",
+      "order": 7,
+      "grade": 2,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID2-10",
+      "name": "피타고라스 정리",
+      "order": 8,
+      "grade": 2,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID2-11",
+      "name": "경우의 수",
+      "order": 3,
+      "grade": 2,
+      "area": "L1-PROB"
+    },
+    {
+      "id": "L3-MID2-12",
+      "name": "확률의 계산",
+      "order": 4,
+      "grade": 2,
+      "area": "L1-PROB"
+    },
+    {
+      "id": "L3-MID3-01",
+      "name": "제곱근과 실수",
+      "order": 4,
+      "grade": 3,
+      "area": "L1-NUM"
+    },
+    {
+      "id": "L3-MID3-02",
+      "name": "근호를 포함한 식의 계산",
+      "order": 5,
+      "grade": 3,
+      "area": "L1-NUM"
+    },
+    {
+      "id": "L3-MID3-03",
+      "name": "다항식의 곱셈과 인수분해",
+      "order": 3,
+      "grade": 3,
+      "area": "L1-EXPR"
+    },
+    {
+      "id": "L3-MID3-04",
+      "name": "이차방정식",
+      "order": 4,
+      "grade": 3,
+      "area": "L1-EQ"
+    },
+    {
+      "id": "L3-MID3-05",
+      "name": "이차함수와 그래프",
+      "order": 4,
+      "grade": 3,
+      "area": "L1-FUNC"
+    },
+    {
+      "id": "L3-MID3-06",
+      "name": "이차함수의 그래프의 성질",
+      "order": 5,
+      "grade": 3,
+      "area": "L1-FUNC"
+    },
+    {
+      "id": "L3-MID3-07",
+      "name": "삼각비",
+      "order": 9,
+      "grade": 3,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID3-08",
+      "name": "삼각비의 활용",
+      "order": 10,
+      "grade": 3,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID3-09",
+      "name": "원의 성질",
+      "order": 11,
+      "grade": 3,
+      "area": "L1-GEO"
+    },
+    {
+      "id": "L3-MID3-10",
+      "name": "산포도",
+      "order": 5,
+      "grade": 3,
+      "area": "L1-PROB"
+    },
+    {
+      "id": "L3-MID3-11",
+      "name": "상자그림과 산점도",
+      "order": 6,
+      "grade": 3,
+      "area": "L1-PROB"
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "_note": "resources/viaedu-junghak1-to-giha.json 의 고등 과목을 Level 3 과목(고등), 그 단원을 Level 4 대단원으로 넣는다. 고등 과목은 PREREQUISITE 없이 areas 의 Level 1 바로 아래에 둔다. 대단원 area = 대단원이 속하는 Level 1 (판단값, 고쳐서 다시 넣을 수 있다).",
+  "_note": "resources/viaedu-junghak1-to-giha.json 의 고등 과목을 Level 3 과목(category 과목)으로, 그 단원을 Level 4 대단원(category 대단원)으로 넣는다. 고등 과목은 areas(Level 1)의 PREREQUISITE(L2) 아래에 중등 대단원과 나란히 둔다. 대단원 area = 대단원이 속하는 Level 1 (판단값, 고쳐서 다시 넣을 수 있다).",
   "source": "resources/viaedu-junghak1-to-giha.json (비아에듀 초·중·고 수학 개념연결 지도, 최신 개정 교육과정)",
   "subjects": [
     {
