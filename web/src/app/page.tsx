@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import BookBars from "@/components/BookBars";
 import TocUnitForm from "@/components/TocUnitForm";
-import PreviewColumn, { type JsonState, type PreviewPage } from "@/components/PreviewColumn";
-import { fetchJsonPages, fetchPageJson, fetchPageUrls, fetchToc, jsonStorageKey } from "@/lib/ocrApi";
+import PreviewColumn, { type PreviewPage } from "@/components/PreviewColumn";
+import { fetchJsonPages, fetchPageUrls, fetchToc } from "@/lib/ocrApi";
 import { commentaryList, stripExt } from "@/lib/toc";
 import type { BookTocRow, DocEntry, SelectedBook, TocData } from "@/lib/types";
 
@@ -17,9 +17,7 @@ export default function Home() {
   // 비동기 결과는 어떤 요청에 대한 것인지(forKey)와 함께 보관하고, 현재 요청과 다르면 로딩 중으로 본다
   const [pagesResult, setPagesResult] = useState<{ forKey: string; pages: PreviewPage[] } | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
-  const [jsonMode, setJsonMode] = useState<"main" | "batch">("main");
   const [jsonPagesResult, setJsonPagesResult] = useState<{ forKey: string; sets: { main: Set<number>; batch: Set<number> } } | null>(null);
-  const [jsonResult, setJsonResult] = useState<{ forKey: string; state: JsonState } | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -111,47 +109,9 @@ export default function Home() {
     setPageIndex(0);
   };
 
-  // 현재 페이지 JSON (150ms 디바운스, 없으면 다른 저장소 경로로 1회 재시도 후 자동 전환 — ocr.html 과 동일)
   const curPage = pages?.[pageIndex]?.page ?? null;
-  const jsonKey = stem && curPage != null ? `${pagesKey}|${curPage}|${jsonMode}` : "";
-  const json: JsonState = !jsonKey ? { status: "idle" } : jsonResult?.forKey === jsonKey ? jsonResult.state : { status: "loading" };
-  useEffect(() => {
-    if (!jsonKey || curPage == null) return;
-    const ctrl = new AbortController();
-    const done = (state: JsonState) => setJsonResult({ forKey: jsonKey, state });
-    const timer = setTimeout(async () => {
-      const isBatch = jsonMode === "batch";
-      const key = jsonStorageKey(stem, kind, isBatch, curPage);
-      try {
-        const data = await fetchPageJson(key, ctrl.signal);
-        if (data) return done({ status: "ok", key, data });
-        const altKey = jsonStorageKey(stem, kind, !isBatch, curPage);
-        if (await fetchPageJson(altKey, ctrl.signal)) {
-          setJsonMode(isBatch ? "main" : "batch"); // 다른 경로에 있으면 그쪽으로 전환 → 다시 조회
-          return;
-        }
-        done({ status: "missing", key });
-      } catch (e) {
-        if ((e as Error).name === "AbortError") return;
-        done({ status: "error", message: "데이터를 로드하는 도중 오류가 발생했습니다." });
-      }
-    }, 150);
-    return () => {
-      clearTimeout(timer);
-      ctrl.abort();
-    };
-  }, [jsonKey, stem, kind, curPage, jsonMode]);
-
-  const changeJsonMode = (m: "main" | "batch") => {
-    setJsonMode(m);
-    pushToast(`JSON 저장소 경로를 [${m === "batch" ? "batch/main/" : "main/"}]으로 전환했습니다.`);
-  };
 
   const storagePath = `${kind === "commentary" ? "commentaries" : "origin"}/${stem ? `${stem}/` : ""}`;
-  const jsonStoragePath =
-    kind === "commentary"
-      ? `${jsonMode === "batch" ? "batch/subs" : "sub"}/${stem ? `${stem}/` : ""}`
-      : `${jsonMode === "batch" ? "batch/main" : "main"}/${stem ? `${stem}/` : ""}`;
 
   return (
     <>
@@ -174,11 +134,7 @@ export default function Home() {
           pageIndex={pageIndex}
           onPageIndex={setPageIndex}
           storagePath={storagePath}
-          jsonStoragePath={jsonStoragePath}
-          jsonMode={jsonMode}
-          onJsonMode={changeJsonMode}
           jsonPages={jsonPages}
-          json={json}
           onToast={pushToast}
         />
         <TocUnitForm book={book} kind={kind} page={curPage} onToast={pushToast} />
