@@ -342,6 +342,7 @@ export type LevelNode = {
   category: string | null;
   grade: number | null;
   school: string | null;
+  revisedCurriculum: number | null; // 개정 교육 과정 (고등 과목)
   kind: string | null;
   areas: string[];
   mapCount: number;
@@ -352,7 +353,7 @@ export async function getLevelNetwork(): Promise<{ nodes: LevelNode[]; edges: Le
   const nodes = await q<LevelNode>(
     `SELECT n.id, (n.props->>'level')::int AS level, n.props->>'name' AS name, (n.props->>'order')::int AS "order",
             n.props->>'category' AS category, (n.props->>'grade')::int AS grade,
-            n.props->>'school' AS school, n.props->>'kind' AS kind,
+            n.props->>'school' AS school, (n.props->>'revisedCurriculum')::int AS "revisedCurriculum", n.props->>'kind' AS kind,
             ARRAY(SELECT a.dst FROM kg.edges a JOIN kg.nodes l ON l.id = a.dst
                   WHERE a.src = n.id AND a.type = 'BELONGS_TO_AREA' ORDER BY (l.props->>'order')::int) AS areas,
             (SELECT COUNT(*)::int FROM kg.edges m WHERE m.dst = n.id AND m.type = 'MAPS_TO') AS "mapCount"
@@ -362,7 +363,7 @@ export async function getLevelNetwork(): Promise<{ nodes: LevelNode[]; edges: Le
   );
   const edges = await q<LevelEdge>(
     `SELECT src, dst, type FROM kg.edges
-     WHERE type IN ('HAS_CHILD', 'PREREQUISITE_OF') AND src ~ '^L[1-5]-' AND dst ~ '^L[1-5]-'`
+     WHERE type IN ('HAS_CHILD', 'PREREQUISITE_OF') AND src ~ '^L[1-9]-' AND dst ~ '^L[1-9]-'`
   );
   return { nodes, edges };
 }
@@ -371,6 +372,137 @@ export async function getLevelNetwork(): Promise<{ nodes: LevelNode[]; edges: Le
 export async function setLevelPrereq(src: string, dst: string, on: boolean) {
   if (on) await q(`INSERT INTO kg.edges (src, dst, type) VALUES ($1, $2, 'PREREQUISITE_OF') ON CONFLICT DO NOTHING`, [src, dst]);
   else await q(`DELETE FROM kg.edges WHERE src = $1 AND dst = $2 AND type = 'PREREQUISITE_OF'`, [src, dst]);
+}
+
+// ---------- 교재 TOC 항목 → 대단원 아래 TOC 노드 등록 (kg.toc_unit_links) ----------
+
+const MAX_LEVEL = 9; // level 노드 id 는 L1-~L9-
+
+export type TocUnitLink = {
+  id: number;
+  tocKey: string;
+  unitId: string; // 바로 위 노드 (대단원 또는 등록된 TOC 노드)
+  rootUnitId: string; // 맨 위 대단원
+  nodeId: string; // 등록으로 만든 TOC 노드
+  tocLabel: string;
+  bookTitle: string;
+  pageKind: "main" | "commentary" | null;
+  page: number | null;
+  createdBy: string;
+  updatedAt: string;
+};
+
+const LINK_COLUMNS = `l.id::int, l.toc_key AS "tocKey", l.unit_id AS "unitId", l.root_unit_id AS "rootUnitId", l.node_id AS "nodeId",
+  l.toc_label AS "tocLabel", l.book_title AS "bookTitle", l.page_kind AS "pageKind", l.page,
+  l.created_by AS "createdBy", l.updated_at::text AS "updatedAt"`;
+
+// 한 도서의 등록
+export async function listTocUnitLinks(stem: string): Promise<TocUnitLink[]> {
+  return q<TocUnitLink>(`SELECT ${LINK_COLUMNS} FROM kg.toc_unit_links l WHERE l.book_stem = $1 ORDER BY l.id`, [nfc(stem)]);
+}
+
+// 대단원들 안에 등록된 TOC 노드 (모든 도서, 계층은 unitId 로 잇는다). 같은 상위 아래에서는 노드 order 순
+export async function listUnitTocLinks(rootUnitIds: string[]): Promise<TocUnitLink[]> {
+  return q<TocUnitLink>(
+    `SELECT ${LINK_COLUMNS} FROM kg.toc_unit_links l JOIN kg.nodes n ON n.id = l.node_id
+     WHERE l.root_unit_id = ANY ($1::text[]) ORDER BY l.root_unit_id, (n.props->>'order')::int, l.id`,
+    [rootUnitIds]
+  );
+}
+
+// TOC 항목 하나를 상위 노드 아래 한 단계 아래 TOC 노드(category TOC, 'Level n TOC')로 등록한다.
+// 상위는 대단원(중등·수학 학습 L3, 고등 L4) 또는 이미 등록된 TOC 노드(교재 TOC 계층). TOC 노드는 L4~L9.
+// 노드 props.source 에 도서 정보·페이지를 함께 넣는다. 이미 등록돼 있으면 이름·도서 정보·페이지만 갱신한다.
+export async function addTocUnitLinks(input: {
+  stem: string;
+  title: string;
+  documentId: number | null;
+  toc: { key: string; level: string; label: string; page: number | null };
+  parentIds: string[];
+  pageKind: "main" | "commentary" | null;
+  page: number | null;
+  user: string;
+}) {
+  const stem = nfc(input.stem);
+  return tx(async (c) => {
+    const parents = (
+      await c.query(
+        `SELECT n.id, (n.props->>'level')::int AS level,
+                CASE WHEN n.props->>'category' = '대단원' THEN n.id
+                     ELSE (SELECT l.root_unit_id FROM kg.toc_unit_links l WHERE l.node_id = n.id) END AS root
+         FROM kg.nodes n
+         WHERE n.id = ANY ($1::text[]) AND n.type = 'level'
+           AND ((n.props->>'category' = '대단원' AND n.props->>'level' IN ('3', '4'))
+                OR (n.props->>'category' = 'TOC' AND (n.props->>'level')::int < $2
+                    AND EXISTS (SELECT 1 FROM kg.toc_unit_links l WHERE l.node_id = n.id)))`,
+        [input.parentIds, MAX_LEVEL]
+      )
+    ).rows as { id: string; level: number; root: string }[];
+    if (parents.length !== input.parentIds.length) {
+      throw new Error(`대단원(중등·수학 학습 L3, 고등 L4) 또는 등록된 TOC 노드(Level ${MAX_LEVEL - 1} 이하)가 아닌 상위가 있습니다`);
+    }
+
+    const source = {
+      book: { stem, title: input.title, documentId: input.documentId },
+      toc: { key: input.toc.key, level: input.toc.level, label: input.toc.label, page: input.toc.page },
+      pageKind: input.pageKind,
+      page: input.page,
+    };
+    for (const u of parents) {
+      const link = (
+        await c.query(
+          `INSERT INTO kg.toc_unit_links (unit_id, root_unit_id, book_stem, book_title, document_id, toc_key, toc_level, toc_label, toc_page,
+                                          page_kind, page, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           ON CONFLICT (book_stem, toc_key, unit_id) DO UPDATE
+             SET book_title = EXCLUDED.book_title, document_id = EXCLUDED.document_id, toc_level = EXCLUDED.toc_level,
+                 toc_label = EXCLUDED.toc_label, toc_page = EXCLUDED.toc_page, page_kind = EXCLUDED.page_kind, page = EXCLUDED.page,
+                 created_by = EXCLUDED.created_by, updated_at = now()
+           RETURNING id, node_id`,
+          [u.id, u.root, stem, input.title, input.documentId, input.toc.key, input.toc.level, input.toc.label, input.toc.page,
+           input.pageKind, input.page, input.user]
+        )
+      ).rows[0] as { id: string; node_id: string | null };
+
+      const level = u.level + 1;
+      const nodeId = link.node_id ?? `L${level}-T${link.id}`;
+      const order = link.node_id
+        ? null
+        : (
+            await c.query(
+              `SELECT COALESCE(MAX((n.props->>'order')::int), 0) + 1 AS o FROM kg.edges e JOIN kg.nodes n ON n.id = e.dst
+               WHERE e.src = $1 AND e.type = 'HAS_CHILD'`,
+              [u.id]
+            )
+          ).rows[0].o;
+      await c.query(
+        `INSERT INTO kg.nodes (id, type, book, props) VALUES ($1, 'level', 'level', $2)
+         ON CONFLICT (id) DO UPDATE SET props = kg.nodes.props || (EXCLUDED.props - 'order'), updated_at = now()`,
+        [nodeId, { level, name: input.toc.label, order: order ?? 0, category: "TOC", source }]
+      );
+      if (!link.node_id) {
+        await c.query(`INSERT INTO kg.edges (src, dst, type) VALUES ($1, $2, 'HAS_CHILD')`, [u.id, nodeId]);
+        await c.query(`UPDATE kg.toc_unit_links SET node_id = $1 WHERE id = $2`, [nodeId, link.id]);
+      }
+    }
+    return parents.length;
+  });
+}
+
+// 등록 해제: 만든 TOC 노드와 그 아래 등록된 TOC 노드를 모두 지운다 (간선과 이 표의 행도 함께 지워진다). 지운 노드 수를 돌려준다
+export async function deleteTocUnitLink(id: number) {
+  return tx(async (c) => {
+    const del = await c.query(
+      `WITH RECURSIVE d(id) AS (
+         SELECT node_id FROM kg.toc_unit_links WHERE id = $1 AND node_id IS NOT NULL
+         UNION SELECT e.dst FROM kg.edges e JOIN d ON e.src = d.id WHERE e.type = 'HAS_CHILD'
+       )
+       DELETE FROM kg.nodes WHERE id IN (SELECT id FROM d)`,
+      [id]
+    );
+    await c.query(`DELETE FROM kg.toc_unit_links WHERE id = $1`, [id]);
+    return del.rowCount ?? 0;
+  });
 }
 
 // ---------- DB 테이블 보기 (/tables) ----------
@@ -416,6 +548,25 @@ export async function getTableRows(name: string, page: number) {
     ).rows.map((r) => r.r as Record<string, unknown>);
     return { name, columns, rows, total, page, pageSize: TABLE_PAGE_SIZE };
   });
+}
+
+// ---------- unlimited-ocr 문서 목록·TOC (public.documents 를 직접 읽는다) ----------
+
+// unlimited-ocr /api/toc-list 와 같은 조건·순서 (kind='main', 최신순)
+export async function listOcrDocs(page: number, pageSize: number) {
+  const total = (await q<{ n: number }>(`SELECT count(*)::int AS n FROM public.documents WHERE kind = 'main'`))[0].n;
+  const rows = await q<{ id: string; title: string | null; status: string }>(
+    `SELECT id::text, title, status FROM public.documents WHERE kind = 'main' ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+    [pageSize, (page - 1) * pageSize]
+  );
+  const entries = rows.map((r) => ({ id: r.id, name: r.title ?? "", main_stem: (r.title ?? "").replace(".pdf", ""), status: r.status }));
+  return { entries, page, total, total_pages: Math.ceil(total / pageSize) };
+}
+
+// unlimited-ocr /api/get-toc?id= 와 같은 형태 (toc + documentId). 없으면 null
+export async function getOcrToc(id: number) {
+  const row = (await q<{ toc: Record<string, unknown> | null }>(`SELECT toc FROM public.documents WHERE id = $1`, [id]))[0];
+  return row ? { ...(row.toc ?? {}), documentId: id } : null;
 }
 
 // ---------- 노드 보기 (에이전트 결과 URL 이 여는 내용) ----------

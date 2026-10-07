@@ -5,7 +5,7 @@
 | 화면 | 내용 |
 |---|---|
 | `/login` | Office-Manager(coo.qoolla.com) 계정 로그인 |
-| `/` 도서 입력 | ocr.html과 같은 BookToc·TOC 문서 목록, 미리보기, 페이지 추출 JSON + 오른쪽 그래프 입력 폼(도서·TOC / 페이지 / 교육과정·과목 대응 / 문단) |
+| `/` 도서 입력 | ocr.html과 같은 BookToc·TOC 문서 목록, 미리보기, 페이지 추출 JSON + 오른쪽 폼: 대단원 토글(중등 L3, 고등 L4) 아래 도서 TOC. TOC 항목(모든 계층)의 '등록'은 토글된 대단원 아래 소단원(L4/L5) 노드로 넣고, 도서 정보와 왼쪽 미리보기 페이지를 `kg.toc_unit_links` 와 노드 `props.source` 에 남긴다 |
 | `/network` 과목 그물 | 최상위 7개 카테고리와 교육과정·과목 노드, 선수 관계를 네트워크 그래프로 보기·편집 |
 | `/agent` 에이전트 | 자연어 → 그래프 쿼리 생성(Claude) → 실행 → 결과(노드 URL)를 표로 보여 줌 |
 | `/node?id=` | 노드 하나의 내용(문단 본문, 페이지 이미지)과 연결 |
@@ -26,8 +26,8 @@ npm run dev                  # http://localhost:3310 (3000·3001 은 다른 서�
 
 - 로그인: `POST /api/auth/login` 이 서버에서 Office-Manager NextAuth 흐름을 호출한다(`/api/auth/csrf` → `/api/auth/callback/credentials` → `/api/auth/session`). unlimited-ocr `app.py` 의 `authenticate_with_office_manager` 와 같은 흐름.
 - apiv3 토큰: 로그인 때 Office-Manager 세션 응답으로 받은 `token`(모든 서비스가 공유하는 토큰). apiv3 를 호출할 때 `Authorization: Bearer <token>` 으로 붙인다. apiv3 에 따로 로그인하지 않는다. 세션에 token 이 없으면 로그인 실패.
-- unlimited-ocr 도 같은 공유 토큰을 Bearer 로 받는다. unlimited-ocr `.env` 에 `SHARED_JWT_SECRET`(= office-manager `JWT_SECRET`)이 있어야 검증된다.
-- 토큰은 AES-256-GCM 으로 암호화한 HttpOnly 쿠키(`g3o_session`)에만 있고, 서버 라우트(`/api/book-toc/*`, `/api/ocr/*`)가 붙여 호출한다. 비밀번호는 저장하지 않는다.
+- unlimited-ocr 서버는 호출하지 않는다. 그 데이터는 서버 라우트가 직접 읽는다: 문서 목록·TOC 는 `/api/docs` 가 DB(`public.documents`, `PG*`), 페이지 이미지 목록·추출 JSON 은 `/api/ocr/*` 가 S3(MinIO, `S3_ENDPOINT`·`S3_BUCKET`·`S3_ACCESS_KEY_ID`·`S3_SECRET_ACCESS_KEY`).
+- 토큰은 AES-256-GCM 으로 암호화한 HttpOnly 쿠키(`g3o_session`)에만 있고, 서버 라우트(`/api/book-toc/*`)가 붙여 호출한다. 비밀번호는 저장하지 않는다.
 - BookToc 목록(`/api/book-toc/[page]`)의 작성자는 로그인한 사용자 아이디(Office-Manager `user.id`)로 서버가 정한다. 브라우저에서 바꿀 수 없다.
 - 세션 만료 = 그 토큰의 `exp`. 만료·위조·로그아웃이면 `src/proxy.ts` 가 화면은 `/login` 으로, API 는 401 로 보낸다. apiv3 가 토큰을 거부해도 401 → 로그인 페이지.
 

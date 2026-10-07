@@ -13,6 +13,7 @@ type LNode = {
   category: string | null;
   grade: number | null;
   school: string | null;
+  revisedCurriculum: number | null;
   kind: string | null;
   areas: string[];
   mapCount: number;
@@ -29,7 +30,7 @@ const AREA_COLOR: Record<string, string> = {
   "L1-PROB": "#d55181",
   "L1-GEO": "#008300",
 };
-const LEVEL_NAME = ["", "영역", "PREREQUISITE(중학)", "중등 대단원·고등 과목", "고등 대단원·중등 소단원", "고등 소단원"];
+const LEVEL_NAME = ["", "영역", "PREREQUISITE", "중등·수학 학습 대단원, 고등 과목", "고등 대단원, 중등 소단원, TOC", "고등 소단원, TOC", "TOC", "TOC", "TOC", "TOC"];
 const CATEGORY_RANK: Record<string, number> = { 소단원: 1, 대단원: 2, 과목: 3 }; // 선수는 같거나 상위 category 로만
 const KIND_NAME: Record<string, string> = {
   concept: "개념", theorem: "정리", property: "성질", formula: "공식", definition: "정의", strategy: "전략", method: "방법", info: "정보",
@@ -92,6 +93,14 @@ export default function NetworkView() {
   const [data, setData] = useState<{ nodes: LNode[]; edges: LEdge[] } | null>(null);
   const [maxLevel, setMaxLevel] = useState(3);
   const [selected, setSelected] = useState<string | null>(null);
+  // 클릭으로 펼친 노드: 펼치기 level 과 상관없이 그 바로 아래 노드를 보인다
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const selectedRef = useRef<string | null>(null); // 그물 클릭 처리기에서 현재 선택을 읽는다
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+  // 다시 그릴 때 클릭한 노드가 화면에서 같은 자리에 있도록 (노드 id, 화면 위치, 확대 비율)
+  const anchor = useRef<{ id: string; x: number; y: number; zoom: number } | null>(null);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
 
   const load = useCallback(async () => {
@@ -111,16 +120,33 @@ export default function NetworkView() {
 
   const info = useMemo(() => (data ? resolve(data.nodes, data.edges) : null), [data]);
 
-  // 그물 그리기 (보이는 level 이 바뀌면 다시 배치)
+  // 보이는 노드: 펼치기 level 이하 + 보이는 펼친 노드의 바로 아래 노드 (펼친 노드를 따라 아래로 이어진다)
+  const shown = useMemo(() => {
+    if (!data) return new Set<string>();
+    const kids = new Map<string, string[]>();
+    for (const e of data.edges) if (e.type === "HAS_CHILD") kids.set(e.src, [...(kids.get(e.src) ?? []), e.dst]);
+    const out = new Set(data.nodes.filter((n) => n.level <= maxLevel).map((n) => n.id));
+    const queue = [...out].filter((id) => expanded.has(id));
+    while (queue.length) {
+      for (const k of kids.get(queue.pop()!) ?? []) {
+        if (out.has(k)) continue;
+        out.add(k);
+        if (expanded.has(k)) queue.push(k);
+      }
+    }
+    return out;
+  }, [data, maxLevel, expanded]);
+
+  // 그물 그리기 (보이는 노드가 바뀌면 다시 배치)
   useEffect(() => {
     if (!data || !info || !box.current) return;
     let destroyed = false;
     import("cytoscape").then(({ default: cytoscape }) => {
       if (destroyed || !box.current) return;
       cy.current?.destroy();
-      const nodes = data.nodes.filter((n) => n.level <= maxLevel);
-      const shown = new Set(nodes.map((n) => n.id));
+      const nodes = data.nodes.filter((n) => shown.has(n.id));
       const edges = data.edges.filter((e) => shown.has(e.src) && shown.has(e.dst));
+      const hasHidden = new Set(data.edges.filter((e) => e.type === "HAS_CHILD" && shown.has(e.src) && !shown.has(e.dst)).map((e) => e.src));
       cy.current = cytoscape({
         container: box.current,
         elements: [
@@ -131,6 +157,7 @@ export default function NetworkView() {
               level: n.level,
               category: n.category ?? "",
               color: AREA_COLOR[info.area.get(n.id) ?? ""] ?? "#6b7280",
+              more: hasHidden.has(n.id) ? 1 : 0, // 숨은 하위 노드가 있음 (클릭하면 펼침)
             },
           })),
           ...edges.map((e) => ({
@@ -173,6 +200,8 @@ export default function NetworkView() {
           { selector: "node[level = 2]", style: { width: 110, height: 20, "font-size": 10, "background-opacity": 0.55 } },
           { selector: 'node[category = "과목"]', style: { width: 16, height: 16, "font-weight": "bold", "font-size": 12 } },
           { selector: 'node[category = "소단원"]', style: { width: 8, height: 8, "font-size": 10 } },
+          { selector: 'node[category = "TOC"]', style: { shape: "diamond", width: 9, height: 9, "font-size": 10 } },
+          { selector: "node[more = 1]", style: { "border-width": 2, "border-color": "#9ca3af", "border-style": "double" } },
           { selector: "node:selected", style: { "border-width": 3, "border-color": "#fde68a" } },
           { selector: 'edge[kind = "tree"]', style: { width: 1, "line-color": "#4b5563", "curve-style": "taxi", "taxi-direction": "horizontal" } },
           {
@@ -194,15 +223,39 @@ export default function NetworkView() {
           },
           { selector: "edge.hl", style: { width: 2.5, opacity: 1, "line-color": "#fde68a", "target-arrow-color": "#fde68a", "z-index": 10 } },
         ],
-        layout: { name: "preset", positions: treePositions(nodes, info.primary), padding: 30, animate: false },
+        layout: { name: "preset", positions: treePositions(nodes, info.primary), padding: 30, animate: false, fit: !anchor.current },
       });
-      cy.current.on("tap", "node", (ev) => setSelected(ev.target.id()));
-      cy.current.on("tap", (ev) => ev.target === cy.current && setSelected(null));
+      const c = cy.current;
+      // 클릭한 노드를 다시 그리기 전 화면 위치로
+      const a = anchor.current;
+      if (a && c.$id(a.id).nonempty()) {
+        c.zoom(a.zoom);
+        const p = c.$id(a.id).renderedPosition();
+        c.panBy({ x: a.x - p.x, y: a.y - p.y });
+      } else if (a) {
+        c.fit(undefined, 30);
+      }
+      if (selectedRef.current) c.$id(selectedRef.current).select();
+      // 노드 클릭: 처음이면 선택하고 바로 아래 노드를 펼친다, 이미 선택한 노드면 펼침/접기
+      c.on("tap", "node", (ev) => {
+        const id: string = ev.target.id();
+        const p = ev.target.renderedPosition();
+        anchor.current = { id, x: p.x, y: p.y, zoom: c.zoom() };
+        const again = selectedRef.current === id;
+        setSelected(id);
+        setExpanded((cur) => {
+          const next = new Set(cur);
+          if (again && next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+      });
+      c.on("tap", (ev) => ev.target === c && setSelected(null));
     });
     return () => {
       destroyed = true;
     };
-  }, [data, info, maxLevel]);
+  }, [data, info, shown]);
 
   // 선택한 노드의 선수 화살표만 밝게
   useEffect(() => {
@@ -210,7 +263,7 @@ export default function NetworkView() {
     if (!c) return;
     c.edges().removeClass("hl");
     if (selected) c.$id(selected).connectedEdges('[kind = "prereq"]').addClass("hl");
-  }, [selected, data, maxLevel]);
+  }, [selected, data, shown]);
 
   useEffect(() => () => cy.current?.destroy(), []);
 
@@ -225,6 +278,8 @@ export default function NetworkView() {
   const byId = useMemo(() => new Map((data?.nodes ?? []).map((n) => [n.id, n])), [data]);
   const node = selected ? byId.get(selected) ?? null : null;
   const areas = (data?.nodes ?? []).filter((n) => n.level === 1);
+  // 펼치기 버튼: Level 1~5, 더 깊은 TOC 노드가 있으면 그 깊이까지
+  const levels = Array.from({ length: Math.max(5, ...(data?.nodes ?? []).map((n) => n.level)) }, (_, i) => i + 1);
 
   return (
     <main className="flex-1 flex overflow-hidden p-4 gap-4">
@@ -239,12 +294,17 @@ export default function NetworkView() {
           <span className="text-gray-200">━▶ 선수</span>
           <span>┄ 다른 영역 소속</span>
           <span>(n) = 대응된 TOC·문단 수</span>
+          <span>◎ 클릭하면 하위 펼침 (다시 클릭하면 접기)</span>
           <span className="ml-auto flex items-center gap-1">
             펼치기
-            {[1, 2, 3, 4, 5].map((l) => (
+            {levels.map((l) => (
               <button
                 key={l}
-                onClick={() => setMaxLevel(l)}
+                onClick={() => {
+                  setMaxLevel(l);
+                  setExpanded(new Set()); // level 로 펼치면 클릭 펼침은 초기화
+                  anchor.current = null;
+                }}
                 className={`px-2 py-0.5 rounded-md border text-[11px] font-semibold ${
                   maxLevel === l ? "border-orange-500 bg-orange-500/20 text-orange-400" : "border-white/10 text-gray-400 hover:text-white"
                 }`}
@@ -320,6 +380,7 @@ function NodePanel({
           Level {node.level} {node.category ?? LEVEL_NAME[node.level]}
           {node.grade && ` · 중${node.grade}`}
           {node.school === "high" && " · 고등"}
+          {node.revisedCurriculum && ` · 개정 교육 과정 ${node.revisedCurriculum}`}
           {node.kind && ` · ${KIND_NAME[node.kind] ?? node.kind}`}
           {fixed && " · 고정 노드"}
         </p>

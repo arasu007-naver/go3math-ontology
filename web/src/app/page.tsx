@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import BookBars from "@/components/BookBars";
-import GraphForm from "@/components/GraphForm";
+import TocUnitForm from "@/components/TocUnitForm";
 import PreviewColumn, { type JsonState, type PreviewPage } from "@/components/PreviewColumn";
 import { fetchJsonPages, fetchPageJson, fetchPageUrls, fetchToc, jsonStorageKey } from "@/lib/ocrApi";
 import { commentaryList, stripExt } from "@/lib/toc";
@@ -181,7 +181,7 @@ export default function Home() {
           json={json}
           onToast={pushToast}
         />
-        <GraphForm book={book} kind={kind} page={curPage} imageUrl={pages?.[pageIndex]?.url ?? null} json={json} onToast={pushToast} />
+        <TocUnitForm book={book} kind={kind} page={curPage} onToast={pushToast} />
       </main>
 
       {toast && (
