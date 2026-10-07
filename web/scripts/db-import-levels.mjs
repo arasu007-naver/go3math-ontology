@@ -49,9 +49,11 @@ try {
     if (!areas.length) throw new Error(`영역이 없습니다 (${s.name})`);
     if (s.school !== "high") throw new Error(`과목은 고등(school=high)만 넣습니다 (${s.name})`);
     if (!Number.isInteger(s.educationalStep)) throw new Error(`educationalStep(교육과정 연도)이 필요합니다 (${s.name})`);
+    if (!Number.isInteger(s.revisedCurriculum)) throw new Error(`revisedCurriculum(개정 교육 과정)이 필요합니다 (${s.name})`);
 
     await upsert(s.id, {
       level: 3, name: s.name, order: s.order, category: "과목", school: s.school, curriculum: s.curriculum, educationalStep: s.educationalStep,
+      revisedCurriculum: s.revisedCurriculum,
     });
     await resetUp(s.id);
     for (const a of areas) {

@@ -9,6 +9,7 @@
       "school": "high",
       "curriculum": "2022 개정",
       "educationalStep": 2022,
+      "revisedCurriculum": 2022,
       "sourceKey": "공통 수학1",
       "areas": [
         "L1-EXPR",
@@ -80,6 +81,7 @@
       "school": "high",
       "curriculum": "2022 개정",
       "educationalStep": 2022,
+      "revisedCurriculum": 2022,
       "sourceKey": "공통 수학2",
       "areas": [
         "L1-FUNC",
@@ -143,6 +145,7 @@
       "school": "high",
       "curriculum": "2022 개정",
       "educationalStep": 2022,
+      "revisedCurriculum": 2022,
       "sourceKey": "대수",
       "areas": [
         "L1-NUM",
@@ -206,6 +209,7 @@
       "school": "high",
       "curriculum": "2022 개정",
       "educationalStep": 2022,
+      "revisedCurriculum": 2022,
       "sourceKey": "미적분Ⅰ",
       "areas": [
         "L1-FUNC"
@@ -262,6 +266,7 @@
       "school": "high",
       "curriculum": "2022 개정",
       "educationalStep": 2022,
+      "revisedCurriculum": 2022,
       "sourceKey": "확률과 통계",
       "areas": [
         "L1-PROB"
@@ -312,6 +317,7 @@
       "school": "high",
       "curriculum": "2022 개정",
       "educationalStep": 2022,
+      "revisedCurriculum": 2022,
       "sourceKey": "미적분Ⅱ",
       "areas": [
         "L1-FUNC"
@@ -374,6 +380,7 @@
       "school": "high",
       "curriculum": "2022 개정",
       "educationalStep": 2022,
+      "revisedCurriculum": 2022,
       "sourceKey": "기하",
       "areas": [
         "L1-GEO"

@@ -1,4 +1,4 @@
-// unlimited-ocr API (서버 라우트 /api/ocr/* 경유, 토큰은 서버가 붙인다)
+// unlimited-ocr 데이터 조회. 문서 목록·TOC 는 /api/docs(DB), 페이지·추출 JSON 은 /api/ocr/*(S3) 를 서버가 직접 읽는다
 import { api } from "./api";
 import type { BookTocRow, DocEntry, PageJson, TocData } from "./types";
 
@@ -17,14 +17,20 @@ export async function fetchBookTocs(page: number) {
   return data as { content?: BookTocRow[]; number?: number; totalPages?: number; totalElements?: number; writer: string };
 }
 
+// TOC 문서 목록과 TOC 는 서버 라우트(/api/docs)가 DB(public.documents)에서 직접 읽는다
+async function getDocsJson<T>(query: string): Promise<T> {
+  const res = await api(`/api/docs?${query}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
 export function fetchDocs(page: number) {
-  return getJson<{ entries?: DocEntry[]; page?: number; total_pages?: number; total?: number }>(
-    `/toc-list?page=${page}&page_size=8`
-  );
+  return getDocsJson<{ entries?: DocEntry[]; page?: number; total_pages?: number; total?: number }>(`page=${page}&page_size=8`);
 }
 
 export function fetchToc(docId: string) {
-  return getJson<TocData>(`/get-toc?id=${encodeURIComponent(docId)}`);
+  return getDocsJson<TocData>(`id=${encodeURIComponent(docId)}`);
 }
 
 // MinIO 폴더명이 NFC/NFD 섞여 있으므로 서버가 돌려준 실제 키로 URL을 만든다 (ocr.html getS3PageUrls 와 동일)
