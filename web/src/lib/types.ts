@@ -71,3 +71,81 @@ export type PageInput = {
 export type SavedParagraph = ParagraphInput & { id: string };
 export type SavedPage = { id: string; tocKey: string | null; paragraphs: SavedParagraph[]; updatedAt: string };
 export type ProblemRef = { id: string; page: number; kind: string; idx: number; snippet: string };
+
+// ── 수학 개념 딕셔너리, 플래시카드, 퀴즈, 색인 (NotebookLM / AI Studio) ──
+export type DictionaryItem = {
+  id?: number;
+  book_stem: string;
+  book_title?: string;
+  chapter_title?: string;
+  term: string;
+  english_term?: string;
+  definition: string;
+  formula?: string;
+  geometric_meaning?: string;
+  theorems?: Array<{ name: string; description: string; note?: string }>;
+  misconceptions?: string[];
+  examples?: Array<{ page?: number; problem: string; solution: string }>;
+  prerequisites?: string[];
+  subsequent_concepts?: string[];
+  pages: number[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type FlashcardItem = {
+  id?: number;
+  book_stem: string;
+  book_title?: string;
+  chapter_title?: string;
+  front: string;
+  back: string;
+  hint?: string;
+  formula?: string;
+  pages: number[];
+  created_at?: string;
+};
+
+export type QuizOption = {
+  id: number;
+  text: string;
+};
+
+export type QuizItem = {
+  id?: number;
+  book_stem: string;
+  book_title?: string;
+  chapter_title?: string;
+  question: string;
+  options: QuizOption[];
+  correct_option_id: number;
+  explanation: string;
+  socratic_hints?: string[];
+  pages: number[];
+  created_at?: string;
+};
+
+export type BookIndexItem = {
+  id?: number;
+  book_stem: string;
+  book_title?: string;
+  chapter_title?: string;
+  term: string;
+  category?: string;
+  definition?: string;
+  formula?: string;
+  pages: number[];
+  created_at?: string;
+};
+
+export type TocUnitRange = {
+  id: string;
+  title: string;
+  chapterTitle?: string;
+  sectionTitle?: string;
+  startPage: number;
+  endPage: number;
+  level: "chapter" | "section";
+  order: number;
+};
+

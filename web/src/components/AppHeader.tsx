@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 
 const NAV = [
   { href: "/", label: "도서 입력" },
+  { href: "/dictionary", label: "딕셔너리" },
   { href: "/network", label: "과목 그물" },
   { href: "/agent", label: "에이전트" },
   { href: "/tables", label: "테이블" },

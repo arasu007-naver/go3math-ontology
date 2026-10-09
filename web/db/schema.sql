@@ -366,3 +366,74 @@ UPDATE kg.toc_unit_links SET root_unit_id = unit_id WHERE root_unit_id IS NULL;
 ALTER TABLE kg.toc_unit_links ALTER COLUMN root_unit_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS toc_unit_links_unit ON kg.toc_unit_links (unit_id);
 CREATE INDEX IF NOT EXISTS toc_unit_links_root ON kg.toc_unit_links (root_unit_id);
+
+-- ---------- 수학 개념 딕셔너리, 플래시카드, 퀴즈, 색인 (NotebookLM / AI Studio 연동) ----------
+CREATE TABLE IF NOT EXISTS kg.dictionary (
+  id                  BIGSERIAL PRIMARY KEY,
+  book_stem           TEXT NOT NULL,
+  book_title          TEXT,
+  chapter_title       TEXT,
+  term                TEXT NOT NULL,
+  english_term        TEXT,
+  definition          TEXT NOT NULL,
+  formula             TEXT,
+  geometric_meaning   TEXT,
+  theorems            JSONB DEFAULT '[]'::jsonb,
+  misconceptions      JSONB DEFAULT '[]'::jsonb,
+  examples            JSONB DEFAULT '[]'::jsonb,
+  prerequisites       JSONB DEFAULT '[]'::jsonb,
+  subsequent_concepts JSONB DEFAULT '[]'::jsonb,
+  pages               INT[] DEFAULT '{}',
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (book_stem, term)
+);
+CREATE INDEX IF NOT EXISTS idx_dict_book ON kg.dictionary (book_stem);
+CREATE INDEX IF NOT EXISTS idx_dict_term ON kg.dictionary (term);
+
+CREATE TABLE IF NOT EXISTS kg.flashcards (
+  id            BIGSERIAL PRIMARY KEY,
+  book_stem     TEXT NOT NULL,
+  book_title    TEXT,
+  chapter_title TEXT,
+  front         TEXT NOT NULL,
+  back          TEXT NOT NULL,
+  hint          TEXT,
+  formula       TEXT,
+  pages         INT[] DEFAULT '{}',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_fc_book ON kg.flashcards (book_stem);
+
+CREATE TABLE IF NOT EXISTS kg.quizzes (
+  id                BIGSERIAL PRIMARY KEY,
+  book_stem         TEXT NOT NULL,
+  book_title        TEXT,
+  chapter_title     TEXT,
+  question          TEXT NOT NULL,
+  options           JSONB NOT NULL,
+  correct_option_id INT NOT NULL,
+  explanation       TEXT NOT NULL,
+  socratic_hints    JSONB DEFAULT '[]'::jsonb,
+  pages             INT[] DEFAULT '{}',
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_qz_book ON kg.quizzes (book_stem);
+
+CREATE TABLE IF NOT EXISTS kg.book_index (
+  id            BIGSERIAL PRIMARY KEY,
+  book_stem     TEXT NOT NULL,
+  book_title    TEXT,
+  chapter_title TEXT,
+  term          TEXT NOT NULL,
+  category      TEXT,
+  definition    TEXT,
+  formula       TEXT,
+  pages         INT[] DEFAULT '{}',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (book_stem, term)
+);
+ALTER TABLE kg.book_index ADD COLUMN IF NOT EXISTS chapter_title TEXT;
+CREATE INDEX IF NOT EXISTS idx_idx_book ON kg.book_index (book_stem);
+
+
