@@ -10,6 +10,9 @@ const NAV = [
   { href: "/network", label: "과목 그물" },
   { href: "/agent", label: "에이전트" },
   { href: "/tables", label: "테이블" },
+  { href: "/md-viewer", label: "MD 뷰어" },
+  { href: "/quiz-viewer", label: "퀴즈 뷰어" },
+  { href: "/aside", label: "Aside" },
 ];
 
 export default function AppHeader({ subtitle }: { subtitle: string }) {
