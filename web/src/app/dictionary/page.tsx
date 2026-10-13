@@ -266,6 +266,8 @@ export default function DictionaryPage() {
   const [toast, setToast] = useState<Toast>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const jsonFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImportingJson, setIsImportingJson] = useState(false);
 
   const pushToast = useCallback((msg: string, type: "success" | "error" | "info" = "success") => {
     setToast({ msg, type });
@@ -523,6 +525,262 @@ export default function DictionaryPage() {
     }
   };
 
+  // ── 현재 탭별 액션 라벨 및 스타일 설정 ──
+  const tabActionConfig = useMemo(() => {
+    switch (activeTab) {
+      case "dictionary":
+        return {
+          label: "딕셔너리 추가",
+          cleanName: "수학 딕셔너리",
+          colorClass: "bg-orange-600/30 hover:bg-orange-600/50 border-orange-500/40 text-orange-200 shadow-orange-600/10",
+        };
+      case "flashcards":
+        return {
+          label: "플래시카드 추가",
+          cleanName: "플래시카드",
+          colorClass: "bg-purple-600/30 hover:bg-purple-600/50 border-purple-500/40 text-purple-200 shadow-purple-600/10",
+        };
+      case "quizzes":
+        return {
+          label: "퀴즈 추가",
+          cleanName: "퀴즈",
+          colorClass: "bg-emerald-600/30 hover:bg-emerald-600/50 border-emerald-500/40 text-emerald-200 shadow-emerald-600/10",
+        };
+      case "index":
+        return {
+          label: "색인 추가",
+          cleanName: "개념 색인",
+          colorClass: "bg-blue-600/30 hover:bg-blue-600/50 border-blue-500/40 text-blue-200 shadow-blue-600/10",
+        };
+    }
+  }, [activeTab]);
+
+  // ── NotebookLM 생성 JSON 파일 선택 및 DB 적재 핸들러 ──
+  const handleJsonFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // input 값 초기화(동일 파일 재선택 가능)
+    e.target.value = "";
+
+    setIsImportingJson(true);
+    pushToast(`'${file.name}' 파일을 읽고 분석 중입니다...`, "info");
+
+    try {
+      let rawText = await file.text();
+      rawText = rawText.replace(/^\uFEFF/, "").trim();
+
+      if (!rawText) {
+        throw new Error("선택한 파일이 비어 있습니다.");
+      }
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(rawText);
+      } catch {
+        // 마크다운 코드 블록(```json ... ```) 또는 텍스트 내 JSON 추출
+        const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (codeBlockMatch) {
+          parsed = JSON.parse(codeBlockMatch[1].trim());
+        } else {
+          const arrayMatch = rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (arrayMatch) {
+            parsed = JSON.parse(arrayMatch[0]);
+          } else {
+            const objMatch = rawText.match(/\{\s*"[\s\S]*"\s*:[\s\S]*\}/);
+            if (objMatch) {
+              parsed = JSON.parse(objMatch[0]);
+            } else {
+              throw new Error("올바른 JSON 데이터 또는 JSON 코드 블록을 찾을 수 없습니다.");
+            }
+          }
+        }
+      }
+
+      // 래핑 객체 지원 ({ dictionary: [...] }, { items: [...] } 등)
+      let items: any[] = [];
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (typeof parsed === "object" && parsed !== null) {
+        if (activeTab === "dictionary" && Array.isArray(parsed.dictionary)) items = parsed.dictionary;
+        else if (activeTab === "flashcards" && Array.isArray(parsed.flashcards)) items = parsed.flashcards;
+        else if (activeTab === "quizzes" && Array.isArray(parsed.quizzes)) items = parsed.quizzes;
+        else if (activeTab === "index" && (Array.isArray(parsed.index) || Array.isArray(parsed.bookIndex))) {
+          items = parsed.index || parsed.bookIndex;
+        } else if (Array.isArray(parsed.items)) {
+          items = parsed.items;
+        } else if (Array.isArray(parsed.data)) {
+          items = parsed.data;
+        } else {
+          items = [parsed];
+        }
+      }
+
+      if (items.length === 0) {
+        throw new Error("파일 내에 유효한 데이터 항목이 없습니다.");
+      }
+
+      const currentStem = book?.stem || "imported_book";
+      const currentTitle = book?.title || "교재";
+      const fallbackChapter = (() => {
+        if (selectedChapterFilter && selectedChapterFilter !== "all") return selectedChapterFilter;
+        const u = tocUnits.find(unit => unit.id === selectedUnitId);
+        if (u) return u.title;
+        return "";
+      })();
+
+      const payload: {
+        dictionary?: DictionaryItem[];
+        flashcards?: FlashcardItem[];
+        quizzes?: QuizItem[];
+        bookIndex?: BookIndexItem[];
+      } = {};
+
+      if (activeTab === "dictionary") {
+        payload.dictionary = items.map((it: any) => ({
+          book_stem: currentStem,
+          book_title: currentTitle,
+          chapter_title: String(it.chapter_title || it.chapterTitle || fallbackChapter || ""),
+          term: String(it.term || it.name || ""),
+          english_term: String(it.english_term || it.englishTerm || ""),
+          definition: String(it.definition || it.desc || it.description || ""),
+          formula: String(it.formula || ""),
+          geometric_meaning: String(it.geometric_meaning || it.geometricMeaning || ""),
+          theorems: Array.isArray(it.theorems)
+            ? it.theorems.map((th: any) =>
+                typeof th === "string"
+                  ? { name: "정리", description: th }
+                  : { name: String(th.name || ""), description: String(th.description || "") }
+              )
+            : [],
+          misconceptions: Array.isArray(it.misconceptions) ? it.misconceptions.map(String) : [],
+          examples: Array.isArray(it.examples)
+            ? it.examples.map((ex: any) =>
+                typeof ex === "string"
+                  ? { problem: ex, solution: "" }
+                  : { problem: String(ex.problem || ""), solution: String(ex.solution || "") }
+              )
+            : [],
+          prerequisites: Array.isArray(it.prerequisites) ? it.prerequisites.map(String) : [],
+          subsequent_concepts: Array.isArray(it.subsequent_concepts || it.subsequentConcepts)
+            ? (it.subsequent_concepts || it.subsequentConcepts).map(String)
+            : [],
+          pages: Array.isArray(it.pages)
+            ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+            : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : []))
+        })).filter((item: any) => item.term && item.definition);
+
+        if (payload.dictionary.length === 0) {
+          throw new Error("유효한 딕셔너리 항목(term, definition 필수)이 없습니다.");
+        }
+      } else if (activeTab === "flashcards") {
+        payload.flashcards = items.map((it: any) => ({
+          book_stem: currentStem,
+          book_title: currentTitle,
+          chapter_title: String(it.chapter_title || it.chapterTitle || fallbackChapter || ""),
+          front: String(it.front || it.question || it.term || ""),
+          back: String(it.back || it.answer || it.definition || ""),
+          hint: String(it.hint || ""),
+          formula: String(it.formula || ""),
+          pages: Array.isArray(it.pages)
+            ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+            : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : []))
+        })).filter((item: any) => item.front && item.back);
+
+        if (payload.flashcards.length === 0) {
+          throw new Error("유효한 플래시카드 항목(front, back 필수)이 없습니다.");
+        }
+      } else if (activeTab === "quizzes") {
+        payload.quizzes = items.map((it: any) => {
+          let options: Array<{ id: number; text: string }> = [];
+          if (Array.isArray(it.options)) {
+            options = it.options.map((opt: any, idx: number) =>
+              typeof opt === "string"
+                ? { id: idx + 1, text: opt }
+                : { id: Number(opt.id || idx + 1), text: String(opt.text || "") }
+            );
+          }
+
+          let correctId = 1;
+          if (typeof it.correct_option_id !== "undefined" || typeof it.correctOptionId !== "undefined") {
+            const rawId = it.correct_option_id ?? it.correctOptionId;
+            if (typeof rawId === "number") correctId = rawId;
+            else if (typeof rawId === "string") {
+              const upper = rawId.trim().toUpperCase();
+              if (upper === "A" || upper === "1") correctId = 1;
+              else if (upper === "B" || upper === "2") correctId = 2;
+              else if (upper === "C" || upper === "3") correctId = 3;
+              else if (upper === "D" || upper === "4") correctId = 4;
+              else {
+                const parsedNum = parseInt(rawId, 10);
+                if (!isNaN(parsedNum)) correctId = parsedNum;
+              }
+            }
+          }
+
+          return {
+            book_stem: currentStem,
+            book_title: currentTitle,
+            chapter_title: String(it.chapter_title || it.chapterTitle || fallbackChapter || ""),
+            question: String(it.question || ""),
+            options,
+            correct_option_id: correctId,
+            explanation: String(it.explanation || ""),
+            socratic_hints: Array.isArray(it.socratic_hints || it.socraticHints)
+              ? (it.socratic_hints || it.socraticHints).map(String)
+              : [],
+            pages: Array.isArray(it.pages)
+              ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+              : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : []))
+          };
+        }).filter((item: any) => item.question && item.options.length > 0);
+
+        if (payload.quizzes.length === 0) {
+          throw new Error("유효한 퀴즈 항목(question 및 options 보기 필수)이 없습니다.");
+        }
+      } else if (activeTab === "index") {
+        payload.bookIndex = items.map((it: any) => ({
+          book_stem: currentStem,
+          book_title: currentTitle,
+          chapter_title: String(it.chapter_title || it.chapterTitle || fallbackChapter || ""),
+          term: String(it.term || it.name || ""),
+          category: String(it.category || "개념"),
+          definition: String(it.definition || it.desc || it.description || ""),
+          formula: String(it.formula || ""),
+          pages: Array.isArray(it.pages)
+            ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+            : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : []))
+        })).filter((item: any) => item.term);
+
+        if (payload.bookIndex.length === 0) {
+          throw new Error("유효한 색인 항목(term 필수)이 없습니다.");
+        }
+      }
+
+      const res = await fetch("/api/dictionary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "DB 저장 실패");
+
+      const savedCount =
+        activeTab === "dictionary" ? payload.dictionary?.length :
+        activeTab === "flashcards" ? payload.flashcards?.length :
+        activeTab === "quizzes" ? payload.quizzes?.length :
+        payload.bookIndex?.length;
+
+      pushToast(`Knowledge Graph DB에 ${savedCount}개 ${tabActionConfig.cleanName} 항목이 성공적으로 저장되었습니다!`, "success");
+      await loadData(currentStem);
+    } catch (err: unknown) {
+      const error = err as Error;
+      pushToast(`파일 적재 오류: ${error.message}`, "error");
+    } finally {
+      setIsImportingJson(false);
+    }
+  };
+
   // ── 챕터 필터링 데이터 ──
   const chapterOptions = useMemo(() => {
     const set = new Set<string>();
@@ -599,6 +857,14 @@ export default function DictionaryPage() {
             ref={fileInputRef}
             onChange={handlePdfUpload}
             accept=".pdf"
+            className="hidden"
+          />
+          {/* NotebookLM JSON 파일 적재용 숨김 input */}
+          <input
+            type="file"
+            ref={jsonFileInputRef}
+            onChange={handleJsonFileImport}
+            accept=".json,application/json"
             className="hidden"
           />
           <button
@@ -903,6 +1169,35 @@ export default function DictionaryPage() {
                 className="w-full bg-[#121824] border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
               />
             </div>
+
+            <div className="h-4 w-[1px] bg-white/10 mx-1"></div>
+
+            {/* 탭별 추가 버튼 (프롬프트 열기 버튼 왼쪽) */}
+            <button
+              type="button"
+              onClick={() => jsonFileInputRef.current?.click()}
+              disabled={isImportingJson}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${tabActionConfig.colorClass}`}
+              title={`NotebookLM에서 생성한 ${tabActionConfig.cleanName} JSON 파일을 선택하여 Knowledge Graph DB에 저장`}
+            >
+              {isImportingJson ? (
+                <RotateCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <UploadCloud className="w-3.5 h-3.5" />
+              )}
+              <span>{tabActionConfig.label}</span>
+            </button>
+
+            {/* 프롬프트 열기 버튼 */}
+            <button
+              type="button"
+              onClick={() => openPromptModalForUnit()}
+              className="px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
+              title="NotebookLM 프롬프트 개별 복사 창 열기"
+            >
+              <Copy className="w-3.5 h-3.5 text-amber-300" />
+              <span>프롬프트 열기</span>
+            </button>
           </div>
         </div>
 
@@ -919,13 +1214,25 @@ export default function DictionaryPage() {
               <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-500 text-xs">
                 <BookOpen className="w-10 h-10 text-gray-600" />
                 <p>구축된 수학 딕셔너리 항목이 없습니다.</p>
-                <button
-                  onClick={() => openPromptModalForUnit()}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-indigo-600/20 flex items-center gap-1.5"
-                >
-                  <Copy className="w-4 h-4 text-amber-300" />
-                  <span>NotebookLM 프롬프트 열기</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => jsonFileInputRef.current?.click()}
+                    disabled={isImportingJson}
+                    className="px-4 py-2 rounded-xl bg-orange-600/30 hover:bg-orange-600/50 border border-orange-500/40 text-orange-200 font-bold transition-all cursor-pointer shadow-lg flex items-center gap-1.5"
+                  >
+                    {isImportingJson ? <RotateCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                    <span>딕셔너리 추가</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openPromptModalForUnit()}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-indigo-600/20 flex items-center gap-1.5"
+                  >
+                    <Copy className="w-4 h-4 text-amber-300" />
+                    <span>프롬프트 열기</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1025,13 +1332,25 @@ export default function DictionaryPage() {
               <div className="h-full flex flex-col items-center justify-center gap-2 text-gray-500 text-xs">
                 <Layers className="w-10 h-10 text-gray-600" />
                 <p>추출된 플래시카드가 없습니다.</p>
-                <button
-                  onClick={() => openPromptModalForUnit()}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <Copy className="w-4 h-4 text-amber-300" />
-                  <span>플래시카드 프롬프트 복사</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => jsonFileInputRef.current?.click()}
+                    disabled={isImportingJson}
+                    className="px-4 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 font-bold transition-all cursor-pointer shadow-lg flex items-center gap-1.5"
+                  >
+                    {isImportingJson ? <RotateCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                    <span>플래시카드 추가</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openPromptModalForUnit()}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-purple-600/20 flex items-center gap-1.5"
+                  >
+                    <Copy className="w-4 h-4 text-amber-300" />
+                    <span>프롬프트 열기</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1119,13 +1438,25 @@ export default function DictionaryPage() {
               <div className="h-full flex flex-col items-center justify-center gap-2 text-gray-500 text-xs">
                 <HelpCircle className="w-10 h-10 text-gray-600" />
                 <p>추출된 퀴즈가 없습니다.</p>
-                <button
-                  onClick={() => openPromptModalForUnit()}
-                  className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <Copy className="w-4 h-4 text-amber-300" />
-                  <span>퀴즈 프롬프트 복사</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => jsonFileInputRef.current?.click()}
+                    disabled={isImportingJson}
+                    className="px-4 py-2 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-200 font-bold transition-all cursor-pointer shadow-lg flex items-center gap-1.5"
+                  >
+                    {isImportingJson ? <RotateCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                    <span>퀴즈 추가</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openPromptModalForUnit()}
+                    className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-teal-600/20 flex items-center gap-1.5"
+                  >
+                    <Copy className="w-4 h-4 text-amber-300" />
+                    <span>프롬프트 열기</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4 max-w-3xl mx-auto">
@@ -1256,13 +1587,25 @@ export default function DictionaryPage() {
               <div className="h-full flex flex-col items-center justify-center gap-2 text-gray-500 text-xs">
                 <Hash className="w-10 h-10 text-gray-600" />
                 <p>추출된 색인 항목이 없습니다.</p>
-                <button
-                  onClick={() => openPromptModalForUnit()}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <Copy className="w-4 h-4 text-amber-300" />
-                  <span>개념 색인 프롬프트 복사</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => jsonFileInputRef.current?.click()}
+                    disabled={isImportingJson}
+                    className="px-4 py-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-200 font-bold transition-all cursor-pointer shadow-lg flex items-center gap-1.5"
+                  >
+                    {isImportingJson ? <RotateCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                    <span>색인 추가</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openPromptModalForUnit()}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-blue-600/20 flex items-center gap-1.5"
+                  >
+                    <Copy className="w-4 h-4 text-amber-300" />
+                    <span>프롬프트 열기</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="overflow-x-auto">
