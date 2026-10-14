@@ -232,7 +232,7 @@ export default function DictionaryPage() {
   const [showTocPanel, setShowTocPanel] = useState<boolean>(true);
 
   // ── 활성 탭 및 필터 ──
-  const [activeTab, setActiveTab] = useState<"dictionary" | "flashcards" | "quizzes" | "index">("dictionary");
+  const [activeTab, setActiveTab] = useState<"dictionary" | "flashcards" | "quizzes" | "index">("index");
   const [selectedChapterFilter, setSelectedChapterFilter] = useState<string>("all");
 
   // ── 데이터 상태 ──
@@ -254,6 +254,7 @@ export default function DictionaryPage() {
   // ── NotebookLM 개별 프롬프트 모달 상태 ──
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [promptTargetUnitId, setPromptTargetUnitId] = useState<string>("");
+  const [promptOnlyTask, setPromptOnlyTask] = useState<PromptTaskKey | null>(null); // 탭의 '프롬프트 열기'는 그 탭 프롬프트만
   const [copiedPromptKey, setCopiedPromptKey] = useState<PromptTaskKey | null>(null);
 
   // ── NotebookLM 결과 직접 붙여넣기 모달 ──
@@ -416,7 +417,8 @@ export default function DictionaryPage() {
   };
 
   // ── NotebookLM 프롬프트 모달 열기 ──
-  const openPromptModalForUnit = (unitId?: string) => {
+  const openPromptModalForUnit = (unitId?: string, onlyTask?: PromptTaskKey) => {
+    setPromptOnlyTask(onlyTask ?? null);
     const targetId = unitId || (selectedUnitId !== "all" ? selectedUnitId : tocUnits[0]?.id || "all");
     setPromptTargetUnitId(targetId);
     setCopiedPromptKey(null);
@@ -924,6 +926,7 @@ export default function DictionaryPage() {
             onClick={() => {
               const u = tocUnits.find(unit => unit.id === selectedUnitId);
               setPasteTargetUnitTitle(u ? u.title : "");
+              setPasteDataType(activeTab);
               setShowPasteModal(true);
             }}
             className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 transition-all flex items-center gap-1.5 cursor-pointer"
@@ -1093,6 +1096,17 @@ export default function DictionaryPage() {
         <div className="flex items-center justify-between gap-4 shrink-0 flex-wrap">
           <div className="flex items-center gap-2 bg-black/40 p-1 rounded-xl border border-white/10">
             <button
+              onClick={() => setActiveTab("index")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "index"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Hash className="w-3.5 h-3.5" />
+              <span>개념 색인 ({filteredIndex.length})</span>
+            </button>
+            <button
               onClick={() => setActiveTab("dictionary")}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === "dictionary"
@@ -1124,17 +1138,6 @@ export default function DictionaryPage() {
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span>퀴즈 은행 ({filteredQuizzes.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("index")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "index"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <Hash className="w-3.5 h-3.5" />
-              <span>개념 색인 ({filteredIndex.length})</span>
             </button>
           </div>
 
@@ -1191,7 +1194,7 @@ export default function DictionaryPage() {
             {/* 프롬프트 열기 버튼 */}
             <button
               type="button"
-              onClick={() => openPromptModalForUnit()}
+              onClick={() => openPromptModalForUnit(undefined, activeTab)}
               className="px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
               title="NotebookLM 프롬프트 개별 복사 창 열기"
             >
@@ -1226,7 +1229,7 @@ export default function DictionaryPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => openPromptModalForUnit()}
+                    onClick={() => openPromptModalForUnit(undefined, activeTab)}
                     className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-indigo-600/20 flex items-center gap-1.5"
                   >
                     <Copy className="w-4 h-4 text-amber-300" />
@@ -1344,7 +1347,7 @@ export default function DictionaryPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => openPromptModalForUnit()}
+                    onClick={() => openPromptModalForUnit(undefined, activeTab)}
                     className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-purple-600/20 flex items-center gap-1.5"
                   >
                     <Copy className="w-4 h-4 text-amber-300" />
@@ -1450,7 +1453,7 @@ export default function DictionaryPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => openPromptModalForUnit()}
+                    onClick={() => openPromptModalForUnit(undefined, activeTab)}
                     className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-teal-600/20 flex items-center gap-1.5"
                   >
                     <Copy className="w-4 h-4 text-amber-300" />
@@ -1599,7 +1602,7 @@ export default function DictionaryPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => openPromptModalForUnit()}
+                    onClick={() => openPromptModalForUnit(undefined, activeTab)}
                     className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all cursor-pointer shadow-lg shadow-blue-600/20 flex items-center gap-1.5"
                   >
                     <Copy className="w-4 h-4 text-amber-300" />
@@ -1655,7 +1658,10 @@ export default function DictionaryPage() {
 
       {/* ── 5. NotebookLM 개별 프롬프트 복사 모달 (TOC 생성 및 4대 태스크 1개씩 개별 복사) ── */}
       {showPromptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          onMouseDown={e => { if (e.target === e.currentTarget) setShowPromptModal(false); }}
+        >
           <div className="glass w-[900px] max-w-full max-h-[90vh] rounded-2xl p-6 border border-indigo-500/30 shadow-2xl flex flex-col gap-4 overflow-hidden">
             {/* 모달 헤더 */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
@@ -1702,6 +1708,7 @@ export default function DictionaryPage() {
             <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
               {/* 0. TOC 목차 JSON 추출 및 toc.json 생성 프롬프트 (최상단) */}
               {(() => {
+                if (promptOnlyTask) return null;
                 const promptText = getTocExtractionPrompt(currentBookTitle);
                 const isCopied = copiedPromptKey === "toc";
                 return (
@@ -1736,6 +1743,7 @@ export default function DictionaryPage() {
 
               {/* 1. 플래시카드 프롬프트 */}
               {(() => {
+                if (promptOnlyTask && promptOnlyTask !== "flashcards") return null;
                 const promptText = getFlashcardPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "flashcards";
                 return (
@@ -1772,6 +1780,7 @@ export default function DictionaryPage() {
 
               {/* 2. 퀴즈 & 소크라테스 힌트 프롬프트 */}
               {(() => {
+                if (promptOnlyTask && promptOnlyTask !== "quizzes") return null;
                 const promptText = getQuizPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "quizzes";
                 return (
@@ -1808,6 +1817,7 @@ export default function DictionaryPage() {
 
               {/* 3. 개념 색인(Index) 프롬프트 */}
               {(() => {
+                if (promptOnlyTask && promptOnlyTask !== "index") return null;
                 const promptText = getIndexPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "index";
                 return (
@@ -1844,6 +1854,7 @@ export default function DictionaryPage() {
 
               {/* 4. 심층 딕셔너리 구축 프롬프트 */}
               {(() => {
+                if (promptOnlyTask && promptOnlyTask !== "dictionary") return null;
                 const promptText = getDictionaryPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "dictionary";
                 return (
