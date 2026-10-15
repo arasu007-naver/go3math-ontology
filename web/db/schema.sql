@@ -436,4 +436,21 @@ CREATE TABLE IF NOT EXISTS kg.book_index (
 ALTER TABLE kg.book_index ADD COLUMN IF NOT EXISTS chapter_title TEXT;
 CREATE INDEX IF NOT EXISTS idx_idx_book ON kg.book_index (book_stem);
 
+-- ---------- 교재 PDF → Mathpix MD 전환 기록 (NotebookLM 이 못 읽는 PDF 를 MD 로 제공) ----------
+-- status: submitted(제출) → completed(MD 전환 완료) → saved(qoollastorage 의 S3_MD_PREFIX 아래 저장 완료) / failed
+CREATE TABLE IF NOT EXISTS kg.document_convert_log (
+  id             BIGSERIAL PRIMARY KEY,
+  book_stem      TEXT NOT NULL,
+  book_title     TEXT,
+  pdf_key        TEXT NOT NULL,  -- qoollastorage 의 원본 PDF 키 (origin/<stem>.pdf)
+  mathpix_pdf_id TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'submitted'
+                 CHECK (status IN ('submitted', 'completed', 'saved', 'failed')),
+  md_key         TEXT,           -- qoollastorage 에 저장한 MD 키 (<S3_MD_PREFIX>/<stem>.md)
+  error          TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_dcl_book ON kg.document_convert_log (book_stem, created_at DESC);
+
 

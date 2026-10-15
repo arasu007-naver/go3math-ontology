@@ -1,4 +1,4 @@
-import { GetObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 // MinIO(s3.qoolla.com) 직접 조회. unlimited-ocr 와 같은 .env 값(S3_*)을 쓴다.
 export const S3_BUCKET = process.env.S3_BUCKET || "qoollastorage";
@@ -43,4 +43,21 @@ export async function getText(key: string): Promise<string | null> {
     }
   }
   return null;
+}
+
+// 객체 본문(바이트). getText 와 같은 NFC/NFD 규칙. 없으면 null
+export async function getBytes(key: string): Promise<Uint8Array | null> {
+  for (const k of new Set([key.normalize("NFC"), key.normalize("NFD")])) {
+    try {
+      const res = await client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: k }));
+      return (await res.Body?.transformToByteArray()) ?? null;
+    } catch (e) {
+      if ((e as { name?: string }).name !== "NoSuchKey") throw e;
+    }
+  }
+  return null;
+}
+
+export async function putText(key: string, body: string, contentType = "text/markdown; charset=utf-8") {
+  await client.send(new PutObjectCommand({ Bucket: S3_BUCKET, Key: key.normalize("NFC"), Body: body, ContentType: contentType }));
 }

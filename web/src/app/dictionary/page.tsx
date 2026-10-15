@@ -39,6 +39,14 @@ import type {
 } from "@/lib/types";
 
 type Toast = { msg: string; type: "success" | "error" | "info" } | null;
+type ConvertLogView = { book_stem: string; status: "submitted" | "completed" | "saved" | "failed"; md_key: string | null; error: string | null };
+const MATHPIX_LABEL: Record<ConvertLogView["status"] | "none", string> = {
+  none: "PDF → Mathpix",
+  failed: "PDF → Mathpix",
+  submitted: "제출",
+  completed: "MD 전환 완료",
+  saved: "저장 완료",
+};
 type PromptTaskKey = "toc" | "flashcards" | "quizzes" | "index" | "dictionary";
 
 // ── 0. TOC 목차 JSON 추출 프롬프트 생성 헬퍼 ──
@@ -225,7 +233,8 @@ function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
 export default function DictionaryPage() {
   // ── 도서 선택 상태 ──
   const [book, setBook] = useState<SelectedBook | null>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [convertLog, setConvertLog] = useState<ConvertLogView | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
 
   // ── TOC 기반 단원 목록 및 선택 ──
   const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
@@ -266,7 +275,6 @@ export default function DictionaryPage() {
   // ── 토스트 ──
   const [toast, setToast] = useState<Toast>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const jsonFileInputRef = useRef<HTMLInputElement | null>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
 
@@ -283,7 +291,6 @@ export default function DictionaryPage() {
   // ── 도서 선택 콜백 ──
   const selectBook = useCallback((b: SelectedBook) => {
     setBook(b);
-    setSelectedFileName(null);
     setSelectedUnitId("all");
     setSelectedChapterFilter("all");
     pushToast(`도서 '${b.title}'이(가) 선택되었습니다.`, "info");
@@ -382,37 +389,52 @@ export default function DictionaryPage() {
     return map;
   }, [tocUnits, dictionaryList, flashcardList, quizList, indexList]);
 
-  // ── PDF 파일 직접 선택 및 업로드 ──
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("pdfFile", file);
-
-    pushToast(`'${file.name}' 업로드 및 분석 준비 중...`, "info");
+  // ── PDF → Mathpix 전환 (document_convert_log) ──
+  // 제출 상태면 Mathpix 처리 상태를 서버가 조회해 갱신한다
+  const loadConvertLog = useCallback(async (stem: string) => {
     try {
-      const res = await fetch("/api/dictionary/upload-pdf", {
-        method: "POST",
-        body: formData
+      const res = await fetch(`/api/dictionary/mathpix?bookStem=${encodeURIComponent(stem)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setConvertLog(data.log);
+    } catch (err) {
+      pushToast(`Mathpix 조회 실패: ${(err as Error).message}`, "error");
+    }
+  }, [pushToast]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setConvertLog(null);
+    if (book?.stem) loadConvertLog(book.stem);
+  }, [book?.stem, loadConvertLog]);
+
+  // 제출 상태 동안 5초마다 Mathpix 처리 상태 조회
+  useEffect(() => {
+    if (convertLog?.status !== "submitted") return;
+    const t = setInterval(() => loadConvertLog(convertLog.book_stem), 5000);
+    return () => clearInterval(t);
+  }, [convertLog?.status, convertLog?.book_stem, loadConvertLog]);
+
+  const handleMathpixClick = async () => {
+    if (!book) return pushToast("도서를 먼저 선택하세요.", "error");
+    const status = convertLog?.status;
+    if (status === "submitted") return loadConvertLog(book.stem);
+    const isSave = status === "completed" || status === "saved";
+    setIsConverting(true);
+    try {
+      const res = await fetch("/api/dictionary/mathpix", {
+        method: isSave ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookStem: book.stem, bookTitle: book.title }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
-      setSelectedFileName(file.name);
-      setBook({
-        source: "document",
-        sourceId: "uploaded",
-        title: data.bookTitle,
-        stem: data.stem,
-        documentId: null,
-        toc: null,
-        commentaryStem: ""
-      });
-      pushToast(`PDF '${file.name}'이(가) 소스로 로드되었습니다!`, "success");
-    } catch (err: unknown) {
-      const error = err as Error;
-      pushToast(`업로드 실패: ${error.message}`, "error");
+      setConvertLog(data.log);
+      pushToast(isSave ? `MD 저장 완료: ${data.log.md_key}` : "Mathpix 에 제출했습니다.", "success");
+    } catch (err) {
+      pushToast(`Mathpix 처리 실패: ${(err as Error).message}`, "error");
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -853,14 +875,6 @@ export default function DictionaryPage() {
       {/* 2. 한 줄 액션 버튼 그룹 영역 */}
       <div className="border-b border-white/5 py-2.5 px-6 flex items-center justify-between shrink-0 glass shadow-sm gap-4 flex-wrap">
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* PDF 파일 선택 버튼 */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handlePdfUpload}
-            accept=".pdf"
-            className="hidden"
-          />
           {/* NotebookLM JSON 파일 적재용 숨김 input */}
           <input
             type="file"
@@ -869,13 +883,15 @@ export default function DictionaryPage() {
             accept=".json,application/json"
             className="hidden"
           />
+          {/* PDF → Mathpix 버튼: PDF → Mathpix → 제출 → MD 전환 완료 → 저장 완료 */}
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-orange-600 hover:bg-orange-700 text-white transition-all shadow-md shadow-orange-600/20 flex items-center gap-1.5 cursor-pointer"
-            title="로컬 PDF 파일 선택 및 소스 업로드"
+            onClick={handleMathpixClick}
+            disabled={!book || isConverting}
+            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-orange-600 hover:bg-orange-700 text-white transition-all shadow-md shadow-orange-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title={convertLog?.status === "failed" ? `전환 실패: ${convertLog.error ?? ""} (클릭하여 다시 제출)` : convertLog?.md_key ? convertLog.md_key : "선택된 도서 PDF 를 Mathpix 로 MD 전환"}
           >
-            <UploadCloud className="w-4 h-4" />
-            <span>PDF 파일 선택</span>
+            {isConverting || convertLog?.status === "submitted" ? <RotateCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+            <span>{MATHPIX_LABEL[convertLog?.status ?? "none"]}</span>
           </button>
 
           {/* 현재 선택된 도서 뱃지 */}
@@ -883,7 +899,7 @@ export default function DictionaryPage() {
             <BookOpen className="w-3.5 h-3.5 text-orange-400" />
             <span className="text-gray-400 font-sans font-semibold text-[10px]">도서:</span>
             <span className="text-orange-300 font-bold truncate max-w-[200px]">
-              {selectedFileName || book?.title || "선택된 도서 없음"}
+              {book?.title || "선택된 도서 없음"}
             </span>
           </div>
 
