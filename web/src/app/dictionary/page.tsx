@@ -47,7 +47,7 @@ const MATHPIX_LABEL: Record<ConvertLogView["status"] | "none", string> = {
   completed: "MD 전환 완료",
   saved: "저장 완료",
 };
-type PromptTaskKey = "toc" | "flashcards" | "quizzes" | "index" | "dictionary";
+type PromptTaskKey = "toc" | "flashcards" | "metaFlashcards" | "quizzes" | "metaQuizzes" | "index" | "metaIndex" | "dictionary" | "metaDictionary";
 
 // ── 0. TOC 목차 JSON 추출 프롬프트 생성 헬퍼 ──
 function getTocExtractionPrompt(bookTitle: string) {
@@ -113,12 +113,13 @@ function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
 }
 
 function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 개념 이해도를 정밀 평가하는 4지선다형 퀴즈 3~5문제와 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘.
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 개념 이해도를 정밀 평가하는 4지선다형 퀴즈 3~5문제와 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘. 4지선다형의 각 문항에 매치되는 서술형 퀴즈도 작성할 것.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
 - 반드시 해당 단원 범위 내의 핵심 개념과 오개념을 바탕으로 문제를 구성할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
+- 각 4지선다 문항마다 같은 개념을 풀이 과정이나 근거와 함께 서술하게 하는 서술형 퀴즈(descriptive_quiz)를 1개씩 짝지어 작성할 것.
 
 [필드 규격]
 - chapter_title: "${unit.title}" (단원명)
@@ -130,6 +131,10 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
   - Level 1 (개념 상기): 문제 해결에 필요한 기본 정의/정리 상기 유도
   - Level 2 (오개념 반문): 자주 범하는 실수나 잘못된 가정을 짚는 질문
   - Level 3 (단계별 유도): 정답 도출의 핵심 단계를 밟아가도록 돕는 하위 질문
+- descriptive_quiz: 위 4지선다 문항과 짝을 이루는 서술형 퀴즈
+  - question: 같은 개념을 풀이 과정·근거와 함께 서술하도록 요구하는 질문 (수식은 LaTeX $...$ 표기)
+  - model_answer: 모범 답안 (풀이 과정 포함)
+  - grading_criteria: 채점 기준 배열 (답안에 반드시 들어가야 할 핵심 요소 2~4개)
 - pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
 
 [출력 JSON 예시]
@@ -150,6 +155,15 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
       "$x$ 자리에 음수나 0, 양수를 대입할 때 제한 조건이 있는지 확인해 보세요.",
       "$2^x$의 값이 음수가 될 수 있는지 치역과 정의역을 구분해 보세요."
     ],
+    "descriptive_quiz": {
+      "question": "지수함수 $y=2^x$의 정의역, 치역, 점근선을 각각 구하고 그 이유를 서술하시오.",
+      "model_answer": "모든 실수 $x$에 대해 $2^x$가 정의되므로 정의역은 실수 전체의 집합이다. $2^x>0$이고 모든 양수 값을 가지므로 치역은 양의 실수 전체의 집합이다. $x \\to -\\infty$일 때 $2^x \\to 0$이므로 점근선은 $x$축($y=0$)이다.",
+      "grading_criteria": [
+        "정의역이 실수 전체임을 근거와 함께 제시",
+        "치역이 양의 실수 전체임을 $2^x>0$으로 설명",
+        "점근선이 $y=0$임을 극한 또는 그래프로 설명"
+      ]
+    },
     "pages": [${unit.startPage}]
   }
 ]`;
@@ -182,6 +196,230 @@ function getIndexPrompt(bookTitle: string, unit: TocUnitRange) {
     "pages": [${unit.startPage}]
   }
 ]`;
+}
+
+// ── 메타 정보(유래·교육과정·학습법·문제해결 전략 등) 프롬프트 공통 규칙 ──
+function getMetaRules(unit: TocUnitRange) {
+  return `[단원 지정 규칙]
+- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
+- 본문뿐 아니라 단원 도입글, 학습 목표, 읽기 자료, 수학자 이야기, 쉬어가기/탐구 활동 박스, 교사용 지도 노트, 평가 안내 등 주변 서술까지 빠짐없이 살필 것.
+- 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
+
+[수학 콘텐츠와의 경계 규칙 — 반드시 지킬 것]
+- 수학적 정의·정리·공식·성질을 가진 용어(예: 지수함수, 피타고라스 정리, 수학적 귀납법)는 제외할 것. 그런 내용은 별도의 수학 프롬프트로 추출한다.
+- 같은 이름이라도 관점이 다르면 메타로 분류한다.
+  · "피타고라스 정리"는 제외(수학)하고, "피타고라스(인물)"와 "피타고라스 학파"는 포함(역사·유래)한다.
+  · "수학적 귀납법"은 제외(증명법)하고, "귀납적 추론(사고 전략)"은 포함(문제해결 전략)한다.
+- 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 유래·연도·인물 정보를 외부 지식으로 지어내지 말 것.
+- 해당 단원에 메타 정보가 없으면 빈 배열 []을 출력할 것.
+
+[메타 분류 기준]
+- category: 다음 7개 중 하나
+  · 역사·유래: 수학자, 학파, 개념의 기원, 어원, 기호의 유래
+  · 교육과정·정책: 교육과정, 성취기준, 평가·입시 제도, 교육 정책
+  · 학습법: 학습 전략, 메타인지, 오답 관리, 복습법, 학습 습관
+  · 문제해결 전략: 폴리아 4단계, 거꾸로 풀기, 특수화·일반화, 표 만들기 같은 범용 휴리스틱
+  · 교수법: 수업 모형, 표현 방식(구체물→반구체물→추상), 교구, 발문 기법
+  · 응용·맥락: 실생활 활용 사례, 타 교과·산업·기술과의 연계
+  · 태도·역량: 문제해결, 추론, 의사소통, 연결, 정보처리 같은 교과 역량, 수학적 태도·흥미·자신감
+- scope: "범교과" (모든 학습에 통용) 또는 "수학특화" (수학 학습에만 해당)`;
+}
+
+function getMetaIndexPrompt(bookTitle: string, unit: TocUnitRange) {
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 "수학 개념 그 자체"가 아닌, 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 해당하는 용어의 색인(Index)을 JSON 배열로 추출해 줘.
+
+${getMetaRules(unit)}
+
+[필드 규격]
+- chapter_title: "${unit.title}" (단원명)
+- term: 메타 용어명 (인물명, 제도명, 전략명, 교수법명, 어원 등)
+- category: 위 [메타 분류 기준]의 7개 중 하나
+- scope: "범교과" 또는 "수학특화"
+- definition: 교재 서술을 바탕으로 한 1~2문장 설명
+- related_math_terms: 이 메타 용어가 연결되는 같은 단원의 수학 용어 배열 (KG 말단 노드 연결용, 없으면 [])
+- evidence: 근거가 되는 교재 문장 일부 (30자 이내 요약 또는 발췌)
+- pages: 실제 등장한 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+[출력 JSON 예시]
+[
+  {
+    "chapter_title": "${unit.title}",
+    "term": "네이피어(John Napier)",
+    "category": "역사·유래",
+    "scope": "수학특화",
+    "definition": "천문학 계산의 곱셈을 덧셈으로 바꾸기 위해 로그를 고안한 17세기 스코틀랜드의 수학자",
+    "related_math_terms": ["로그", "상용로그"],
+    "evidence": "복잡한 천문 계산을 간단히 하기 위해 로그를 발명",
+    "pages": [${unit.startPage}]
+  },
+  {
+    "chapter_title": "${unit.title}",
+    "term": "거꾸로 풀기",
+    "category": "문제해결 전략",
+    "scope": "범교과",
+    "definition": "구하려는 결과에서 출발해 조건 쪽으로 역방향으로 추론하는 문제해결 전략",
+    "related_math_terms": ["지수방정식"],
+    "evidence": "결론에서 거슬러 올라가 조건을 찾아보자",
+    "pages": [${unit.startPage}]
+  }
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
+}
+
+function getMetaFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 "수학 개념 그 자체"가 아닌 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)를 학생이 기억하고 활용할 수 있도록 플래시카드를 JSON 배열 형식으로 추출해 줘.
+
+${getMetaRules(unit)}
+
+[필드 규격]
+- chapter_title: "${unit.title}" (단원명)
+- category: 위 [메타 분류 기준]의 7개 중 하나
+- scope: "범교과" 또는 "수학특화"
+- front: 핵심 질문 (예: 인물·유래 묻기, 전략의 이름이나 적용 상황 묻기, 빈칸 채우기)
+- back: 교재 서술에 근거한 명쾌한 답 (1~2문장)
+- hint: 기억을 돕는 가벼운 힌트 (1줄)
+- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (없으면 [])
+- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+[출력 JSON 예시]
+[
+  {
+    "chapter_title": "${unit.title}",
+    "category": "역사·유래",
+    "scope": "수학특화",
+    "front": "로그를 처음 고안한 수학자와 그 목적은?",
+    "back": "네이피어(John Napier). 천문학 계산의 복잡한 곱셈을 덧셈으로 바꿔 간단히 하기 위해 고안했다.",
+    "hint": "곱셈 → 덧셈",
+    "related_math_terms": ["로그"],
+    "pages": [${unit.startPage}]
+  },
+  {
+    "chapter_title": "${unit.title}",
+    "category": "문제해결 전략",
+    "scope": "범교과",
+    "front": "구하려는 결과에서 출발해 조건 쪽으로 거슬러 추론하는 전략의 이름은?",
+    "back": "거꾸로 풀기. 결론이 분명하고 조건이 여러 단계로 얽힌 문제에 효과적이다.",
+    "hint": "결론 → 조건",
+    "related_math_terms": [],
+    "pages": [${unit.startPage}]
+  }
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
+}
+
+function getMetaQuizPrompt(bookTitle: string, unit: TocUnitRange) {
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원의 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대한 이해와 활용 능력을 평가하는 4지선다형 퀴즈 3~5문제와 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘. 4지선다형의 각 문항에 매치되는 서술형 퀴즈도 작성할 것.
+
+${getMetaRules(unit)}
+
+[문항 구성 규칙]
+- 단순 암기(인물·연도)보다 "이 상황에 어떤 전략/학습법이 적절한가", "이 개념이 왜 등장했는가"처럼 이해와 적용을 묻는 문항을 우선할 것.
+- 각 4지선다 문항마다 같은 내용을 서술로 답하게 하는 서술형 퀴즈(descriptive_quiz)를 1개씩 짝지어 작성할 것.
+
+[필드 규격]
+- chapter_title: "${unit.title}" (단원명)
+- category: 위 [메타 분류 기준]의 7개 중 하나
+- scope: "범교과" 또는 "수학특화"
+- question: 문제 내용
+- options: 4개의 선택지 배열 [{ "id": 1, "text": "선택지 내용" }, ...]
+- correct_option_id: 정답 번호 (1~4)
+- explanation: 정답 근거 및 오답 선택지가 틀린 이유
+- socratic_hints: 오답 시 학생의 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
+  - Level 1 (맥락 상기): 관련 유래·전략·학습법의 핵심을 떠올리게 하는 질문
+  - Level 2 (오해 반문): 자주 혼동하는 전략·인물·제도를 짚는 질문
+  - Level 3 (단계별 유도): 정답을 고르는 핵심 판단 기준으로 이끄는 하위 질문
+- descriptive_quiz: 위 4지선다 문항과 짝을 이루는 서술형 퀴즈
+  - question: 같은 내용을 근거와 함께 서술하도록 요구하는 질문
+  - model_answer: 교재 서술에 근거한 모범 답안 (2~4문장)
+  - grading_criteria: 채점 기준 배열 (답안에 반드시 들어가야 할 핵심 요소 2~4개)
+- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (없으면 [])
+- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+[출력 JSON 예시]
+[
+  {
+    "chapter_title": "${unit.title}",
+    "category": "역사·유래",
+    "scope": "수학특화",
+    "question": "네이피어가 로그를 고안한 주된 목적으로 옳은 것은?",
+    "options": [
+      { "id": 1, "text": "함수의 그래프를 그리기 위해" },
+      { "id": 2, "text": "천문학의 복잡한 곱셈 계산을 덧셈으로 바꾸기 위해" },
+      { "id": 3, "text": "무리수의 존재를 증명하기 위해" },
+      { "id": 4, "text": "확률을 계산하기 위해" }
+    ],
+    "correct_option_id": 2,
+    "explanation": "로그는 큰 수의 곱셈을 지수의 덧셈으로 바꾸어 천문 계산을 간단히 하려고 고안되었습니다. 나머지 선택지는 로그의 발명 동기와 관련이 없습니다.",
+    "socratic_hints": [
+      "17세기 과학자들이 가장 많이 시간을 들인 계산은 어떤 종류였을까요?",
+      "로그의 성질 $\\log_a xy = \\log_a x + \\log_a y$는 어떤 연산을 어떤 연산으로 바꾸나요?",
+      "곱셈을 덧셈으로 바꾸면 손계산이 어떻게 달라지는지 생각해 보세요."
+    ],
+    "descriptive_quiz": {
+      "question": "네이피어가 로그를 고안한 배경을 설명하고, 로그의 어떤 성질이 그 목적을 달성하게 했는지 서술하시오.",
+      "model_answer": "17세기 천문학에서는 큰 수의 곱셈 계산이 매우 많았다. 네이피어는 이를 간단히 하려고 로그를 고안했다. 로그는 곱을 합으로 바꾸는 성질이 있어 복잡한 곱셈을 덧셈으로 처리할 수 있게 했다.",
+      "grading_criteria": [
+        "천문학 등 복잡한 계산의 필요성을 언급",
+        "곱셈을 덧셈으로 바꾸는 성질을 언급",
+        "계산이 간단해진다는 효과를 언급"
+      ]
+    },
+    "related_math_terms": ["로그"],
+    "pages": [${unit.startPage}]
+  }
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
+}
+
+function getMetaDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대해 깊이 있는 메타 딕셔너리 항목들을 JSON 배열로 작성해 줘.
+
+${getMetaRules(unit)}
+
+[필드 규격]
+- chapter_title: "${unit.title}" (단원명)
+- term: 한글 용어명 (인물명, 제도명, 전략명, 교수법명, 어원 등)
+- english_term: 영문 용어명 (없으면 빈 문자열)
+- category: 위 [메타 분류 기준]의 7개 중 하나
+- scope: "범교과" 또는 "수학특화"
+- definition: 교재 서술을 바탕으로 한 명확한 정의/설명
+- background: 유래, 등장 배경, 역사적·교육적 맥락
+- educational_significance: 이 메타 정보가 학습자에게 갖는 의미 (왜 알아야 하는가)
+- application: 학습자/교사가 실제로 활용하는 방법 (절차나 단계가 있으면 순서대로)
+- misconceptions: 자주 혼동하거나 잘못 이해하는 점 배열 (문자열 배열, 없으면 [])
+- examples: 교재 속 적용 사례 배열 [{ "situation": "적용 상황", "description": "어떻게 적용되는지" }]
+- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (KG 말단 노드 연결용, 없으면 [])
+- related_meta_terms: 함께 알아두면 좋은 다른 메타 용어 배열 (없으면 [])
+- evidence: 근거가 되는 교재 문장 일부 (30자 이내 요약 또는 발췌)
+- pages: 관련 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+[출력 JSON 예시]
+[
+  {
+    "chapter_title": "${unit.title}",
+    "term": "거꾸로 풀기",
+    "english_term": "working backwards",
+    "category": "문제해결 전략",
+    "scope": "범교과",
+    "definition": "구하려는 결과나 결론에서 출발하여 그것이 성립하기 위한 조건을 역방향으로 찾아가는 문제해결 전략",
+    "background": "폴리아(G. Pólya)가 『어떻게 문제를 풀 것인가』에서 정리한 대표적인 발견술(heuristic) 중 하나로 소개된다.",
+    "educational_significance": "조건이 여러 단계로 얽힌 문제에서 출발점을 찾지 못할 때 사고의 방향을 전환하는 도구가 된다.",
+    "application": "1) 구하려는 값을 먼저 쓴다. 2) 그 값을 얻기 직전 단계에 필요한 조건을 쓴다. 3) 주어진 조건에 닿을 때까지 반복한다. 4) 순방향으로 다시 검산한다.",
+    "misconceptions": ["답을 미리 가정하고 대입하는 것과 같다고 오해하는 경우"],
+    "examples": [
+      { "situation": "지수방정식에서 최종 값이 주어진 경우", "description": "결과 식에서 출발해 밑을 같게 만드는 단계를 거슬러 올라가 미지수 조건을 찾는다." }
+    ],
+    "related_math_terms": ["지수방정식"],
+    "related_meta_terms": ["폴리아의 문제해결 4단계", "특수화와 일반화"],
+    "evidence": "결론에서 거슬러 올라가 조건을 찾아보자",
+    "pages": [${unit.startPage}]
+  }
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
 }
 
 function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
@@ -1762,6 +2000,7 @@ export default function DictionaryPage() {
                 if (promptOnlyTask && promptOnlyTask !== "flashcards") return null;
                 const promptText = getFlashcardPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "flashcards";
+                const isMetaCopied = copiedPromptKey === "metaFlashcards";
                 return (
                   <div className="rounded-xl border border-purple-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -1773,17 +2012,30 @@ export default function DictionaryPage() {
                           단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
                         </span>
                       </div>
-                      <button
-                        onClick={() => copySinglePrompt(promptText, "flashcards", `플래시카드 (${activePromptUnit.title})`)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                          isCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/20"
-                        }`}
-                      >
-                        {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copySinglePrompt(getMetaFlashcardPrompt(currentBookTitle, activePromptUnit), "metaFlashcards", `메타 플래시카드 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isMetaCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                          }`}
+                        >
+                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 메타 플래시카드 추출 프롬프트 복사"}</span>
+                        </button>
+                        <button
+                          onClick={() => copySinglePrompt(promptText, "flashcards", `플래시카드 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/20"
+                          }`}
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
+                        </button>
+                      </div>
                     </div>
                     <textarea
                       readOnly
@@ -1799,6 +2051,7 @@ export default function DictionaryPage() {
                 if (promptOnlyTask && promptOnlyTask !== "quizzes") return null;
                 const promptText = getQuizPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "quizzes";
+                const isMetaCopied = copiedPromptKey === "metaQuizzes";
                 return (
                   <div className="rounded-xl border border-teal-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -1810,17 +2063,30 @@ export default function DictionaryPage() {
                           단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
                         </span>
                       </div>
-                      <button
-                        onClick={() => copySinglePrompt(promptText, "quizzes", `퀴즈 (${activePromptUnit.title})`)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                          isCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : "bg-teal-600 hover:bg-teal-500 text-white shadow-teal-600/20"
-                        }`}
-                      >
-                        {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copySinglePrompt(getMetaQuizPrompt(currentBookTitle, activePromptUnit), "metaQuizzes", `메타 퀴즈 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isMetaCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                          }`}
+                        >
+                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 메타 퀴즈 추출 프롬프트 복사"}</span>
+                        </button>
+                        <button
+                          onClick={() => copySinglePrompt(promptText, "quizzes", `퀴즈 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-teal-600 hover:bg-teal-500 text-white shadow-teal-600/20"
+                          }`}
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
+                        </button>
+                      </div>
                     </div>
                     <textarea
                       readOnly
@@ -1836,6 +2102,7 @@ export default function DictionaryPage() {
                 if (promptOnlyTask && promptOnlyTask !== "index") return null;
                 const promptText = getIndexPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "index";
+                const isMetaCopied = copiedPromptKey === "metaIndex";
                 return (
                   <div className="rounded-xl border border-blue-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -1847,17 +2114,30 @@ export default function DictionaryPage() {
                           단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
                         </span>
                       </div>
-                      <button
-                        onClick={() => copySinglePrompt(promptText, "index", `개념 색인 (${activePromptUnit.title})`)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                          isCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20"
-                        }`}
-                      >
-                        {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copySinglePrompt(getMetaIndexPrompt(currentBookTitle, activePromptUnit), "metaIndex", `Meta 정보 색인 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isMetaCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                          }`}
+                        >
+                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isMetaCopied ? "복사 완료!" : "Meta 정보 색인"}</span>
+                        </button>
+                        <button
+                          onClick={() => copySinglePrompt(promptText, "index", `개념 색인 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20"
+                          }`}
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
+                        </button>
+                      </div>
                     </div>
                     <textarea
                       readOnly
@@ -1873,6 +2153,7 @@ export default function DictionaryPage() {
                 if (promptOnlyTask && promptOnlyTask !== "dictionary") return null;
                 const promptText = getDictionaryPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "dictionary";
+                const isMetaCopied = copiedPromptKey === "metaDictionary";
                 return (
                   <div className="rounded-xl border border-orange-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -1884,17 +2165,30 @@ export default function DictionaryPage() {
                           단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
                         </span>
                       </div>
-                      <button
-                        onClick={() => copySinglePrompt(promptText, "dictionary", `심층 딕셔너리 (${activePromptUnit.title})`)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                          isCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : "bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/20"
-                        }`}
-                      >
-                        {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copySinglePrompt(getMetaDictionaryPrompt(currentBookTitle, activePromptUnit), "metaDictionary", `메타 딕셔너리 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isMetaCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                          }`}
+                        >
+                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 메타 딕셔너리 추출 프롬프트 복사"}</span>
+                        </button>
+                        <button
+                          onClick={() => copySinglePrompt(promptText, "dictionary", `심층 딕셔너리 (${activePromptUnit.title})`)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                            isCopied
+                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                              : "bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/20"
+                          }`}
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
+                        </button>
+                      </div>
                     </div>
                     <textarea
                       readOnly
