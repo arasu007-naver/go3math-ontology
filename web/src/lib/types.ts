@@ -116,9 +116,10 @@ export type QuizItem = {
   book_stem: string;
   book_title?: string;
   chapter_title?: string;
+  quiz_type?: string;
   question: string;
-  options: QuizOption[];
-  correct_option_id: number;
+  options?: QuizOption[];
+  correct_option_id?: number;
   explanation: string;
   socratic_hints?: string[];
   pages: number[];

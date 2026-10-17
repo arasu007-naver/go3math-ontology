@@ -22,10 +22,10 @@ Google One AI Premium / Google Ultra 요금제 구독자 혜택을 100% 활용�
 [PDF 도서 소스] ──> NotebookLM 웹 소스 업로드
                            │
                            ├──> 0. [TOC 프롬프트 복사] ─────────> NotebookLM 실행 ──> `toc.json` 파일 생성 및 다운로드
-                           ├──> 1. [플래시카드 프롬프트 복사] ──> NotebookLM 실행 ──> 결과 복사 ──> [결과 붙여넣기] ──┐
-                           ├──> 2. [퀴즈 프롬프트 복사] ────────> NotebookLM 실행 ──> 결과 복사 ──> [결과 붙여넣기] ──┼─> PostgreSQL (kg 스키마)
-                           ├──> 3. [색인 프롬프트 복사] ────────> NotebookLM 실행 ──> 결과 복사 ──> [결과 붙여넣기] ──┤
-                           └──> 4. [딕셔너리 프롬프트 복사] ────> NotebookLM 실행 ──> 결과 복사 ──> [결과 붙여넣기] ──┘
+                           ├──> 1. [플래시카드 프롬프트 복사] ──> NotebookLM 실행 ──> `chapter-${chapter number}-flashcards.json` 다운로드 ──┐
+                           ├──> 2. [퀴즈 프롬프트 복사] ────────> NotebookLM 실행 ──> `chapter-${chapter number}-quizzes.json` 다운로드 ──┼─> PostgreSQL (kg 스키마)
+                           ├──> 3. [색인 프롬프트 복사] ────────> NotebookLM 실행 ──> `chapter-${chapter number}-indices.json` 다운로드 ──┤
+                           └──> 4. [딕셔너리 프롬프트 복사] ────> NotebookLM 실행 ──> `chapter-${chapter number}-dictionary.json` 다운로드 ──┘
 ```
 
 ### 📋 상세 진행 순서
@@ -34,12 +34,12 @@ Google One AI Premium / Google Ultra 요금제 구독자 혜택을 100% 활용�
    * [NotebookLM 웹사이트](https://notebooklm.google.com)에 접속하여 분석할 PDF 교재를 소스로 업로드합니다.
 2. **단원별 1개씩 프롬프트 복사**:
    * 우리 웹 앱(`/dictionary`) 상단의 **`[NotebookLM 프롬프트 팩]`** 버튼 또는 각 단원 카드의 `[프롬프트 복사]` 버튼을 클릭합니다.
-   * 대상 단원을 선택한 후, 원하는 태스크의 프롬프트를 **1개씩 개별 복사**합니다:
+   * 대상 단원을 선택한 후, 원하는 태스크의 프롬프트를 **1개씩 개별 복사**합니다 (모달에서 '메타 프롬프트' 클릭 시 메타 프롬프트가 표시·복사되고, '이단원프롬프트' 클릭 시 기본 단원 프롬프트가 표시·복사됩니다):
      - 📑 **0. TOC 목차 JSON 추출 및 `toc.json` 생성 프롬프트** `[TOC 프롬프트 복사]`
-     - 🗂️ **1. 플래시카드 추출 프롬프트** (단원 지정 p.start~p.end) `[이 단원 프롬프트 복사]`
-     - 📝 **2. 4지선다 퀴즈 & 소크라테스 힌트 프롬프트** (단원 지정 p.start~p.end) `[이 단원 프롬프트 복사]`
-     - 📑 **3. 개념 색인(Index) 추출 프롬프트** (단원 지정 p.start~p.end) `[이 단원 프롬프트 복사]`
-     - 📚 **4. 심층 딕셔너리 구축 프롬프트** (단원 지정 p.start~p.end) `[이 단원 프롬프트 복사]`
+     - 🗂️ **1. 플래시카드 추출 프롬프트** (단원 지정 p.start~p.end) `chapter-${chapter number}-flashcards.json` 다운로드
+     - 📝 **2. 4지선다 퀴즈 & 소크라테스 힌트 프롬프트** (단원 지정 p.start~p.end) `chapter-${chapter number}-quizzes.json` 다운로드
+     - 📑 **3. 개념 색인(Index) 추출 프롬프트** (단원 지정 p.start~p.end) `chapter-${chapter number}-indices.json` 다운로드
+     - 📚 **4. 심층 딕셔너리 구축 프롬프트** (단원 지정 p.start~p.end) `chapter-${chapter number}-dictionary.json` 다운로드
 3. **NotebookLM에서 실행**:
    * NotebookLM 채팅창에 프롬프트를 붙여넣고 전송합니다.
    * NotebookLM이 생성한 JSON 형식의 결과를 복사합니다 (TOC의 경우 `toc.json` 파일 다운로드/저장).

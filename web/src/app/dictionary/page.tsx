@@ -20,7 +20,9 @@ import {
   ChevronUp,
   Bookmark,
   CheckCircle2,
-  FileCode
+  FileCode,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import BookBars from "@/components/BookBars";
@@ -82,14 +84,25 @@ function getTocExtractionPrompt(bookTitle: string) {
 3. 목차가 완성되면 순수 JSON 코드 블록으로 출력하여 사용자가 바로 toc.json 파일로 저장할 수 있게 할 것.`;
 }
 
+// ── 단원 순번(index) 추출 헬퍼 ──
+function getUnitIndex(unit: TocUnitRange): number {
+  if (unit.id === "all") return 1;
+  if (typeof unit.order === "number" && unit.order >= 0) {
+    return unit.order + 1;
+  }
+  return 1;
+}
+
 // ── 단원별 4대 개별 프롬프트 생성 헬퍼 ──
 function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 학생이 반드시 암기하고 숙지해야 할 핵심 개념/공식 플래시카드를 JSON 배열 형식으로 추출해 줘.
+  const index = getUnitIndex(unit);
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 핵심 개념/공식 플래시카드를 JSON 배열 형식으로 추출하고, ${index}-flashcards.json으로 다운로드 받도록 해줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
 - 반드시 해당 단원 범위 내의 내용만을 바탕으로 추출할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
+- 추출된 결과는 사용자가 ${index}-flashcards.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
 - chapter_title: "${unit.title}" (단원명)
@@ -109,38 +122,53 @@ function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
     "formula": "$a^0 = 1$",
     "pages": [${unit.startPage}]
   }
-]`;
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-flashcards.json으로 다운로드 받도록 해줘.`;
 }
 
 function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 개념 이해도를 정밀 평가하는 4지선다형 퀴즈 3~5문제와 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘. 4지선다형의 각 문항에 매치되는 서술형 퀴즈도 작성할 것.
+  const index = getUnitIndex(unit);
 
-[단원 지정 규칙]
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage})에서 ${index}-dictionary.json의 딕셔너리의 내용을 모두 사용하여 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성하고, ${index}-quizzes.json으로 다운로드 받도록 해줘.
+
+[단원 지정 및 문항 구성 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
-- 반드시 해당 단원 범위 내의 핵심 개념과 오개념을 바탕으로 문제를 구성할 것.
+- 반드시 제공하는 단원 딕셔너리의 핵심 개념·정의·공식·오개념을 바탕으로 문제를 구성할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
-- 각 4지선다 문항마다 같은 개념을 풀이 과정이나 근거와 함께 서술하게 하는 서술형 퀴즈(descriptive_quiz)를 1개씩 짝지어 작성할 것.
+- 1벌: 제공하는 딕셔너리를 기준으로 개념 이해도를 정밀 평가하는 4지선다형 퀴즈 
+- 2벌: 위 4지선다형 퀴즈를 서술형으로 전환한 퀴즈 (각 4지선다 문항과 1:1 대응되는 서술형 퀴즈)
+- 총 2벌의 퀴즈를 하나의 JSON 배열에 순차적으로 작성할 것.
+- 각 퀴즈에 대하여 3단계 소크라테스식 힌트(Level 1 개념 상기, Level 2 오개념 반문, Level 3 단계별 유도)를 반드시 포함할 것.
+- 생성된 결과는 사용자가 ${index}-quizzes.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
+1. 4지선다형 문항 규격:
 - chapter_title: "${unit.title}" (단원명)
-- question: 문제 내용 (수식은 LaTeX $...$ 표기)
+- quiz_type: "multiple_choice" (4지선다형)
+- question: 4지선다 문제 내용 (수식은 LaTeX $...$ 표기)
 - options: 4개의 선택지 배열 [{ "id": 1, "text": "선택지 내용" }, ...]
 - correct_option_id: 정답 번호 (1~4)
 - explanation: 상세한 풀이 및 정답 근거
 - socratic_hints: 오답 시 학생의 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
-  - Level 1 (개념 상기): 문제 해결에 필요한 기본 정의/정리 상기 유도
+  - Level 1 (개념 상기): 문제 해결에 필요한 딕셔너리 기본 정의/정리 상기 유도
   - Level 2 (오개념 반문): 자주 범하는 실수나 잘못된 가정을 짚는 질문
   - Level 3 (단계별 유도): 정답 도출의 핵심 단계를 밟아가도록 돕는 하위 질문
-- descriptive_quiz: 위 4지선다 문항과 짝을 이루는 서술형 퀴즈
-  - question: 같은 개념을 풀이 과정·근거와 함께 서술하도록 요구하는 질문 (수식은 LaTeX $...$ 표기)
-  - model_answer: 모범 답안 (풀이 과정 포함)
-  - grading_criteria: 채점 기준 배열 (답안에 반드시 들어가야 할 핵심 요소 2~4개)
+- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+2. 서술형 문항 규격 (4지선다에서 전환):
+- chapter_title: "${unit.title}" (단원명)
+- quiz_type: "descriptive" (서술형)
+- question: 같은 개념을 풀이 과정·근거와 함께 서술하도록 요구하는 질문 (수식은 LaTeX $...$ 표기)
+- explanation: 모범 답안 및 상세 채점 기준/풀이 근거
+- socratic_hints: 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
 - pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
 
 [출력 JSON 예시]
 [
   {
     "chapter_title": "${unit.title}",
+    "quiz_type": "multiple_choice",
     "question": "다음 중 지수함수 $y=2^x$의 성질로 옳은 것은?",
     "options": [
       { "id": 1, "text": "점근선은 $y$축이다." },
@@ -155,27 +183,34 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
       "$x$ 자리에 음수나 0, 양수를 대입할 때 제한 조건이 있는지 확인해 보세요.",
       "$2^x$의 값이 음수가 될 수 있는지 치역과 정의역을 구분해 보세요."
     ],
-    "descriptive_quiz": {
-      "question": "지수함수 $y=2^x$의 정의역, 치역, 점근선을 각각 구하고 그 이유를 서술하시오.",
-      "model_answer": "모든 실수 $x$에 대해 $2^x$가 정의되므로 정의역은 실수 전체의 집합이다. $2^x>0$이고 모든 양수 값을 가지므로 치역은 양의 실수 전체의 집합이다. $x \\to -\\infty$일 때 $2^x \\to 0$이므로 점근선은 $x$축($y=0$)이다.",
-      "grading_criteria": [
-        "정의역이 실수 전체임을 근거와 함께 제시",
-        "치역이 양의 실수 전체임을 $2^x>0$으로 설명",
-        "점근선이 $y=0$임을 극한 또는 그래프로 설명"
-      ]
-    },
+    "pages": [${unit.startPage}]
+  },
+  {
+    "chapter_title": "${unit.title}",
+    "quiz_type": "descriptive",
+    "question": "지수함수 $y=2^x$의 정의역, 치역, 점근선을 각각 구하고 그 이유를 풀이 과정과 함께 서술하시오.",
+    "explanation": "모든 실수 $x$에 대해 $2^x$가 정의되므로 정의역은 실수 전체의 집합이다. $2^x>0$이고 모든 양수 값을 가지므로 치역은 양의 실수 전체의 집합이다. $x \\to -\\infty$일 때 $2^x \\to 0$이므로 점근선은 $x$축($y=0$)이다.",
+    "socratic_hints": [
+      "지수함수 $y=a^x$ ($a>1$)의 그래프 개형과 축과의 관계를 떠올려 보세요.",
+      "$x$ 자리에 음수나 0, 양수를 대입할 때 제한 조건이 있는지 확인해 보세요.",
+      "$2^x$의 값이 음수가 될 수 있는지 치역과 정의역을 구분해 보세요."
+    ],
     "pages": [${unit.startPage}]
   }
-]`;
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-quizzes.json으로 다운로드 받도록 해줘.`;
 }
 
 function getIndexPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 모든 수학 용어, 개념, 정리(Theorem)의 색인(Index)을 JSON 배열로 추출해 줘.
+  const index = getUnitIndex(unit);
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 모든 수학 용어, 개념, 정리(Theorem)의 색인(Index)을 JSON 배열로 추출하고, ${index}-indices.json으로 다운로드 받도록 해줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
 - 해당 단원 페이지에 등장하는 모든 중요 개념어 및 용어를 누락 없이 색인화할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
+- 추출된 결과는 사용자가 ${index}-indices.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
 - chapter_title: "${unit.title}" (단원명)
@@ -195,7 +230,9 @@ function getIndexPrompt(bookTitle: string, unit: TocUnitRange) {
     "formula": "$y = a^x$",
     "pages": [${unit.startPage}]
   }
-]`;
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-indices.json으로 다운로드 받도록 해줘.`;
 }
 
 // ── 메타 정보(유래·교육과정·학습법·문제해결 전략 등) 프롬프트 공통 규칙 ──
@@ -226,9 +263,11 @@ function getMetaRules(unit: TocUnitRange) {
 }
 
 function getMetaIndexPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 "수학 개념 그 자체"가 아닌, 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 해당하는 용어의 색인(Index)을 JSON 배열로 추출해 줘.
+  const index = getUnitIndex(unit);
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 "수학 개념 그 자체"가 아닌, 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 해당하는 용어의 색인(Index)을 JSON 배열로 추출하고, ${index}-indices.json으로 다운로드 받도록 해줘.
 
 ${getMetaRules(unit)}
+- 추출된 결과는 사용자가 ${index}-indices.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
 - chapter_title: "${unit.title}" (단원명)
@@ -264,13 +303,15 @@ ${getMetaRules(unit)}
   }
 ]
 
-반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-indices.json으로 다운로드 받도록 해줘.`;
 }
 
 function getMetaFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 "수학 개념 그 자체"가 아닌 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)를 학생이 기억하고 활용할 수 있도록 플래시카드를 JSON 배열 형식으로 추출해 줘.
+  const index = getUnitIndex(unit);
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인을 모두 사용하여 "수학 개념 그 자체"가 아닌 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)를 학생이 기억하고 활용할 수 있도록 플래시카드를 JSON 배열 형식으로 추출하고, ${index}-flashcards.json으로 다운로드 받도록 해줘.
 
 ${getMetaRules(unit)}
+- 추출된 결과는 사용자가 ${index}-flashcards.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
 - chapter_title: "${unit.title}" (단원명)
@@ -306,34 +347,48 @@ ${getMetaRules(unit)}
   }
 ]
 
-반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-flashcards.json으로 다운로드 받도록 해줘.`;
 }
 
 function getMetaQuizPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원의 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대한 이해와 활용 능력을 평가하는 4지선다형 퀴즈 3~5문제와 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘. 4지선다형의 각 문항에 매치되는 서술형 퀴즈도 작성할 것.
+  const index = getUnitIndex(unit);
+
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원의 ${index}-dictionary.json의 내용을 모두 사용하여 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대해 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성하고, ${index}-quizzes.json으로 다운로드 받도록 해줘.
 
 ${getMetaRules(unit)}
+- 생성된 결과는 사용자가 ${index}-quizzes.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [문항 구성 규칙]
 - 단순 암기(인물·연도)보다 "이 상황에 어떤 전략/학습법이 적절한가", "이 개념이 왜 등장했는가"처럼 이해와 적용을 묻는 문항을 우선할 것.
-- 각 4지선다 문항마다 같은 내용을 서술로 답하게 하는 서술형 퀴즈(descriptive_quiz)를 1개씩 짝지어 작성할 것.
+- 1벌: 제공하는 딕셔너리 기준 메타 4지선다형 퀴즈
+- 2벌: 위 4지선다형 퀴즈를 메타 서술형(이유·맥락·전략 서술)으로 전환한 퀴즈
+- 총 2벌의 퀴즈를 하나의 JSON 배열에 순차적으로 담을 것.
 
 [필드 규격]
+1. 4지선다형 문항 규격:
 - chapter_title: "${unit.title}" (단원명)
+- quiz_type: "multiple_choice" (4지선다형)
 - category: 위 [메타 분류 기준]의 7개 중 하나
 - scope: "범교과" 또는 "수학특화"
-- question: 문제 내용
+- question: 4지선다 문제 내용
 - options: 4개의 선택지 배열 [{ "id": 1, "text": "선택지 내용" }, ...]
 - correct_option_id: 정답 번호 (1~4)
 - explanation: 정답 근거 및 오답 선택지가 틀린 이유
-- socratic_hints: 오답 시 학생의 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
+- socratic_hints: 오답 시 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
   - Level 1 (맥락 상기): 관련 유래·전략·학습법의 핵심을 떠올리게 하는 질문
   - Level 2 (오해 반문): 자주 혼동하는 전략·인물·제도를 짚는 질문
   - Level 3 (단계별 유도): 정답을 고르는 핵심 판단 기준으로 이끄는 하위 질문
-- descriptive_quiz: 위 4지선다 문항과 짝을 이루는 서술형 퀴즈
-  - question: 같은 내용을 근거와 함께 서술하도록 요구하는 질문
-  - model_answer: 교재 서술에 근거한 모범 답안 (2~4문장)
-  - grading_criteria: 채점 기준 배열 (답안에 반드시 들어가야 할 핵심 요소 2~4개)
+- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (없으면 [])
+- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+2. 서술형 문항 규격 (4지선다에서 전환):
+- chapter_title: "${unit.title}" (단원명)
+- quiz_type: "descriptive" (서술형)
+- category: 위 [메타 분류 기준]의 7개 중 하나
+- scope: "범교과" 또는 "수학특화"
+- question: 같은 맥락을 근거와 함께 서술하도록 요구하는 질문
+- explanation: 교재 서술에 근거한 모범 답안 및 해설 (2~4문장)
+- socratic_hints: 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
 - related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (없으면 [])
 - pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
 
@@ -341,6 +396,7 @@ ${getMetaRules(unit)}
 [
   {
     "chapter_title": "${unit.title}",
+    "quiz_type": "multiple_choice",
     "category": "역사·유래",
     "scope": "수학특화",
     "question": "네이피어가 로그를 고안한 주된 목적으로 옳은 것은?",
@@ -357,27 +413,35 @@ ${getMetaRules(unit)}
       "로그의 성질 $\\log_a xy = \\log_a x + \\log_a y$는 어떤 연산을 어떤 연산으로 바꾸나요?",
       "곱셈을 덧셈으로 바꾸면 손계산이 어떻게 달라지는지 생각해 보세요."
     ],
-    "descriptive_quiz": {
-      "question": "네이피어가 로그를 고안한 배경을 설명하고, 로그의 어떤 성질이 그 목적을 달성하게 했는지 서술하시오.",
-      "model_answer": "17세기 천문학에서는 큰 수의 곱셈 계산이 매우 많았다. 네이피어는 이를 간단히 하려고 로그를 고안했다. 로그는 곱을 합으로 바꾸는 성질이 있어 복잡한 곱셈을 덧셈으로 처리할 수 있게 했다.",
-      "grading_criteria": [
-        "천문학 등 복잡한 계산의 필요성을 언급",
-        "곱셈을 덧셈으로 바꾸는 성질을 언급",
-        "계산이 간단해진다는 효과를 언급"
-      ]
-    },
+    "related_math_terms": ["로그"],
+    "pages": [${unit.startPage}]
+  },
+  {
+    "chapter_title": "${unit.title}",
+    "quiz_type": "descriptive",
+    "category": "역사·유래",
+    "scope": "수학특화",
+    "question": "네이피어가 로그를 고안한 배경을 설명하고, 로그의 어떤 성질이 그 목적을 달성하게 했는지 서술하시오.",
+    "explanation": "17세기 천문학에서는 큰 수의 복잡한 곱셈 계산이 매우 많았습니다. 네이피어는 곱셈을 덧셈으로 바꾸는 로그의 성질($\\log_a xy = \\log_a x + \\log_a y$)을 이용하여 천문 계산을 대폭 단순화하기 위해 로그를 고안했습니다.",
+    "socratic_hints": [
+      "17세기 과학자들이 가장 많이 시간을 들인 계산은 어떤 종류였을까요?",
+      "로그의 성질 $\\log_a xy = \\log_a x + \\log_a y$는 어떤 연산을 어떤 연산으로 바꾸나요?",
+      "곱셈을 덧셈으로 바꾸면 손계산이 어떻게 달라지는지 생각해 보세요."
+    ],
     "related_math_terms": ["로그"],
     "pages": [${unit.startPage}]
   }
 ]
 
-반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-quizzes.json으로 다운로드 받도록 해줘.`;
 }
 
 function getMetaDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대해 깊이 있는 메타 딕셔너리 항목들을 JSON 배열로 작성해 줘.
+  const index = getUnitIndex(unit);
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인을 모두 사용하여 이 단원에 등장하는 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대해 깊이 있는 메타 딕셔너리 항목들을 JSON 배열로 작성하고, ${index}-dictionary.json으로 다운로드 받도록 해줘.
 
 ${getMetaRules(unit)}
+- 작성된 결과는 사용자가 ${index}-dictionary.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
 - chapter_title: "${unit.title}" (단원명)
@@ -419,16 +483,18 @@ ${getMetaRules(unit)}
   }
 ]
 
-반드시 순수 JSON 배열만 코드 블록으로 출력할 것.`;
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-dictionary.json으로 다운로드 받도록 해줘.`;
 }
 
 function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 핵심 수학 개념들에 대해 깊이 있는 딕셔너리 백과 온톨로지 항목들을 JSON 배열로 작성해 줘.
+  const index = getUnitIndex(unit);
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 핵심 수학 개념들에 대해 ${index}-indices.json의 색인을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 JSON 배열로 작성하고, ${index}-dictionary.json으로 다운로드 받도록 해줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
 - 해당 단원 내 핵심 개념들을 중심으로 정의부터 기하학적 의미, 오개념, 예제까지 포괄적으로 작성할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
+- 작성된 결과는 사용자가 ${index}-dictionary.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
 - chapter_title: "${unit.title}" (단원명)
@@ -465,7 +531,9 @@ function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
     "subsequent_concepts": ["지수방정식", "로그함수"],
     "pages": [${unit.startPage}]
   }
-]`;
+]
+
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-dictionary.json으로 다운로드 받도록 해줘.`;
 }
 
 export default function DictionaryPage() {
@@ -497,12 +565,14 @@ export default function DictionaryPage() {
   // ── 퀴즈 인터랙션 상태 ──
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
   const [quizHintLevels, setQuizHintLevels] = useState<Record<number, number>>({});
+  const [revealedQuizAnswers, setRevealedQuizAnswers] = useState<Record<number, boolean>>({});
 
   // ── NotebookLM 개별 프롬프트 모달 상태 ──
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [promptTargetUnitId, setPromptTargetUnitId] = useState<string>("");
   const [promptOnlyTask, setPromptOnlyTask] = useState<PromptTaskKey | null>(null); // 탭의 '프롬프트 열기'는 그 탭 프롬프트만
   const [copiedPromptKey, setCopiedPromptKey] = useState<PromptTaskKey | null>(null);
+  const [promptViewMode, setPromptViewMode] = useState<Record<string, "standard" | "meta">>({});
 
   // ── NotebookLM 결과 직접 붙여넣기 모달 ──
   const [showPasteModal, setShowPasteModal] = useState(false);
@@ -602,7 +672,7 @@ export default function DictionaryPage() {
   // ── 단원별 구축 통계 집계 ──
   const unitStatsMap = useMemo(() => {
     const map = new Map<string, { dict: number; flash: number; quiz: number; index: number; total: number }>();
-    
+
     tocUnits.forEach(u => {
       const isMatch = (itemCh?: string, itemPages?: number[]) => {
         if (itemCh && itemCh === u.title) return true;
@@ -682,6 +752,7 @@ export default function DictionaryPage() {
     const targetId = unitId || (selectedUnitId !== "all" ? selectedUnitId : tocUnits[0]?.id || "all");
     setPromptTargetUnitId(targetId);
     setCopiedPromptKey(null);
+    setPromptViewMode({});
     setShowPromptModal(true);
   };
 
@@ -910,18 +981,18 @@ export default function DictionaryPage() {
           geometric_meaning: String(it.geometric_meaning || it.geometricMeaning || ""),
           theorems: Array.isArray(it.theorems)
             ? it.theorems.map((th: any) =>
-                typeof th === "string"
-                  ? { name: "정리", description: th }
-                  : { name: String(th.name || ""), description: String(th.description || "") }
-              )
+              typeof th === "string"
+                ? { name: "정리", description: th }
+                : { name: String(th.name || ""), description: String(th.description || "") }
+            )
             : [],
           misconceptions: Array.isArray(it.misconceptions) ? it.misconceptions.map(String) : [],
           examples: Array.isArray(it.examples)
             ? it.examples.map((ex: any) =>
-                typeof ex === "string"
-                  ? { problem: ex, solution: "" }
-                  : { problem: String(ex.problem || ""), solution: String(ex.solution || "") }
-              )
+              typeof ex === "string"
+                ? { problem: ex, solution: "" }
+                : { problem: String(ex.problem || ""), solution: String(ex.solution || "") }
+            )
             : [],
           prerequisites: Array.isArray(it.prerequisites) ? it.prerequisites.map(String) : [],
           subsequent_concepts: Array.isArray(it.subsequent_concepts || it.subsequentConcepts)
@@ -953,9 +1024,9 @@ export default function DictionaryPage() {
           throw new Error("유효한 플래시카드 항목(front, back 필수)이 없습니다.");
         }
       } else if (activeTab === "quizzes") {
-        payload.quizzes = items.map((it: any) => {
+        payload.quizzes = items.flatMap((it: any) => {
           let options: Array<{ id: number; text: string }> = [];
-          if (Array.isArray(it.options)) {
+          if (Array.isArray(it.options) && it.options.length > 0) {
             options = it.options.map((opt: any, idx: number) =>
               typeof opt === "string"
                 ? { id: idx + 1, text: opt }
@@ -963,7 +1034,7 @@ export default function DictionaryPage() {
             );
           }
 
-          let correctId = 1;
+          let correctId = 0;
           if (typeof it.correct_option_id !== "undefined" || typeof it.correctOptionId !== "undefined") {
             const rawId = it.correct_option_id ?? it.correctOptionId;
             if (typeof rawId === "number") correctId = rawId;
@@ -980,14 +1051,15 @@ export default function DictionaryPage() {
             }
           }
 
-          return {
+          const primaryQuiz: QuizItem = {
             book_stem: currentStem,
             book_title: currentTitle,
             chapter_title: String(it.chapter_title || it.chapterTitle || fallbackChapter || ""),
-            question: String(it.question || ""),
+            quiz_type: it.quiz_type ? String(it.quiz_type) : (options.length > 0 ? "multiple_choice" : "descriptive"),
+            question: String(it.question || it["퀴즈"] || ""),
             options,
             correct_option_id: correctId,
-            explanation: String(it.explanation || ""),
+            explanation: String(it.explanation || it["답안"] || it.answer_and_explanation || ""),
             socratic_hints: Array.isArray(it.socratic_hints || it.socraticHints)
               ? (it.socratic_hints || it.socraticHints).map(String)
               : [],
@@ -995,10 +1067,38 @@ export default function DictionaryPage() {
               ? it.pages.map(Number).filter((n: number) => !isNaN(n))
               : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : []))
           };
-        }).filter((item: any) => item.question && item.options.length > 0);
+
+          const list: QuizItem[] = [];
+          if (primaryQuiz.question) {
+            list.push(primaryQuiz);
+          }
+
+          if (it.descriptive_quiz && typeof it.descriptive_quiz === "object") {
+            const dq = it.descriptive_quiz;
+            const descQ = String(dq.question || "");
+            if (descQ && descQ !== primaryQuiz.question) {
+              list.push({
+                book_stem: currentStem,
+                book_title: currentTitle,
+                chapter_title: primaryQuiz.chapter_title,
+                quiz_type: "descriptive",
+                question: descQ,
+                options: [],
+                correct_option_id: 0,
+                explanation: String(dq.model_answer || dq.explanation || ""),
+                socratic_hints: Array.isArray(dq.socratic_hints)
+                  ? dq.socratic_hints.map(String)
+                  : primaryQuiz.socratic_hints,
+                pages: primaryQuiz.pages
+              });
+            }
+          }
+
+          return list;
+        }).filter((item: any) => item.question);
 
         if (payload.quizzes.length === 0) {
-          throw new Error("유효한 퀴즈 항목(question 및 options 보기 필수)이 없습니다.");
+          throw new Error("유효한 퀴즈 항목(question 필수)이 없습니다.");
         }
       } else if (activeTab === "index") {
         payload.bookIndex = items.map((it: any) => ({
@@ -1029,9 +1129,9 @@ export default function DictionaryPage() {
 
       const savedCount =
         activeTab === "dictionary" ? payload.dictionary?.length :
-        activeTab === "flashcards" ? payload.flashcards?.length :
-        activeTab === "quizzes" ? payload.quizzes?.length :
-        payload.bookIndex?.length;
+          activeTab === "flashcards" ? payload.flashcards?.length :
+            activeTab === "quizzes" ? payload.quizzes?.length :
+              payload.bookIndex?.length;
 
       pushToast(`Knowledge Graph DB에 ${savedCount}개 ${tabActionConfig.cleanName} 항목이 성공적으로 저장되었습니다!`, "success");
       await loadData(currentStem);
@@ -1242,11 +1342,10 @@ export default function DictionaryPage() {
                   setSelectedUnitId("all");
                   setSelectedChapterFilter("all");
                 }}
-                className={`text-[10px] px-2.5 py-0.5 rounded-lg border transition-all cursor-pointer ${
-                  selectedChapterFilter === "all"
-                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold"
-                    : "border-white/10 text-gray-400 hover:text-white"
-                }`}
+                className={`text-[10px] px-2.5 py-0.5 rounded-lg border transition-all cursor-pointer ${selectedChapterFilter === "all"
+                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold"
+                  : "border-white/10 text-gray-400 hover:text-white"
+                  }`}
               >
                 전체 단원 보기
               </button>
@@ -1262,18 +1361,16 @@ export default function DictionaryPage() {
               return (
                 <div
                   key={unit.id}
-                  className={`rounded-xl border p-2.5 flex flex-col justify-between gap-2 transition-all ${
-                    isSelectedForFilter
-                      ? "bg-emerald-950/40 border-emerald-500/50 shadow-md shadow-emerald-500/10"
-                      : "bg-black/30 border-white/10 hover:border-white/20"
-                  }`}
+                  className={`rounded-xl border p-2.5 flex flex-col justify-between gap-2 transition-all ${isSelectedForFilter
+                    ? "bg-emerald-950/40 border-emerald-500/50 shadow-md shadow-emerald-500/10"
+                    : "bg-black/30 border-white/10 hover:border-white/20"
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                          unit.level === "chapter" ? "bg-amber-500/20 text-amber-300" : "bg-teal-500/20 text-teal-300"
-                        }`}>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${unit.level === "chapter" ? "bg-amber-500/20 text-amber-300" : "bg-teal-500/20 text-teal-300"
+                          }`}>
                           {unit.level === "chapter" ? "대단원" : "소단원"}
                         </span>
                         <h3
@@ -1351,44 +1448,40 @@ export default function DictionaryPage() {
           <div className="flex items-center gap-2 bg-black/40 p-1 rounded-xl border border-white/10">
             <button
               onClick={() => setActiveTab("index")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "index"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
-                  : "text-gray-400 hover:text-white"
-              }`}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${activeTab === "index"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                : "text-gray-400 hover:text-white"
+                }`}
             >
               <Hash className="w-3.5 h-3.5" />
               <span>개념 색인 ({filteredIndex.length})</span>
             </button>
             <button
               onClick={() => setActiveTab("dictionary")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "dictionary"
-                  ? "bg-orange-600 text-white shadow-md shadow-orange-600/20"
-                  : "text-gray-400 hover:text-white"
-              }`}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${activeTab === "dictionary"
+                ? "bg-orange-600 text-white shadow-md shadow-orange-600/20"
+                : "text-gray-400 hover:text-white"
+                }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
               <span>수학 딕셔너리 ({filteredDict.length})</span>
             </button>
             <button
               onClick={() => setActiveTab("flashcards")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "flashcards"
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/20"
-                  : "text-gray-400 hover:text-white"
-              }`}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${activeTab === "flashcards"
+                ? "bg-purple-600 text-white shadow-md shadow-purple-600/20"
+                : "text-gray-400 hover:text-white"
+                }`}
             >
               <Layers className="w-3.5 h-3.5" />
               <span>플래시카드 ({filteredFlashcards.length})</span>
             </button>
             <button
               onClick={() => setActiveTab("quizzes")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "quizzes"
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
-                  : "text-gray-400 hover:text-white"
-              }`}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${activeTab === "quizzes"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
+                : "text-gray-400 hover:text-white"
+                }`}
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span>퀴즈 은행 ({filteredQuizzes.length})</span>
@@ -1619,11 +1712,10 @@ export default function DictionaryPage() {
                     <div
                       key={idx}
                       onClick={() => setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                      className={`min-h-[220px] rounded-2xl border p-5 flex flex-col justify-between cursor-pointer transition-all duration-300 select-none shadow-xl ${
-                        isFlipped
-                          ? "bg-purple-950/40 border-purple-500/50 shadow-purple-500/10"
-                          : "bg-black/40 border-white/10 hover:border-purple-500/30"
-                      }`}
+                      className={`min-h-[220px] rounded-2xl border p-5 flex flex-col justify-between cursor-pointer transition-all duration-300 select-none shadow-xl ${isFlipped
+                        ? "bg-purple-950/40 border-purple-500/50 shadow-purple-500/10"
+                        : "bg-black/40 border-white/10 hover:border-purple-500/30"
+                        }`}
                     >
                       <div className="flex items-center justify-between text-[10px] text-gray-400 border-b border-white/5 pb-2">
                         <div className="flex items-center gap-1.5">
@@ -1718,9 +1810,11 @@ export default function DictionaryPage() {
             ) : (
               <div className="space-y-4 max-w-3xl mx-auto">
                 {filteredQuizzes.map((quiz, qIdx) => {
+                  const hasOptions = Array.isArray(quiz.options) && quiz.options.length > 0;
                   const selectedOpt = quizAnswers[qIdx];
                   const isSubmitted = selectedOpt !== undefined;
                   const isCorrect = isSubmitted && selectedOpt === quiz.correct_option_id;
+                  const isRevealed = Boolean(revealedQuizAnswers[qIdx]);
                   const hintLevel = quizHintLevels[qIdx] || 0;
 
                   return (
@@ -1734,7 +1828,9 @@ export default function DictionaryPage() {
                           <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono font-bold text-xs">
                             Q{qIdx + 1}
                           </span>
-                          <span className="text-xs text-gray-400 font-medium">4지선다 개념 확인</span>
+                          <span className="text-xs text-gray-400 font-medium">
+                            {hasOptions ? "4지선다 개념 확인" : "서술형 개념 퀴즈"}
+                          </span>
                           {quiz.chapter_title && (
                             <span className="text-[10px] text-gray-500">
                               · {quiz.chapter_title}
@@ -1755,37 +1851,56 @@ export default function DictionaryPage() {
                         {quiz.question}
                       </p>
 
-                      {/* 4개 보기 버튼 */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {quiz.options?.map(opt => {
-                          const isThisSelected = selectedOpt === opt.id;
-                          let btnClass = "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10";
-                          if (isSubmitted) {
-                            if (opt.id === quiz.correct_option_id) {
-                              btnClass = "border-emerald-500 bg-emerald-500/20 text-emerald-200 font-bold";
-                            } else if (isThisSelected) {
-                              btnClass = "border-red-500 bg-red-500/20 text-red-200";
-                            } else {
-                              btnClass = "opacity-40 border-white/5 bg-transparent text-gray-500";
+                      {/* 4개 보기 버튼 (옵션이 있는 경우에만 표시) */}
+                      {hasOptions && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {quiz.options!.map(opt => {
+                            const isThisSelected = selectedOpt === opt.id;
+                            let btnClass = "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10";
+                            if (isSubmitted) {
+                              if (opt.id === quiz.correct_option_id) {
+                                btnClass = "border-emerald-500 bg-emerald-500/20 text-emerald-200 font-bold";
+                              } else if (isThisSelected) {
+                                btnClass = "border-red-500 bg-red-500/20 text-red-200";
+                              } else {
+                                btnClass = "opacity-40 border-white/5 bg-transparent text-gray-500";
+                              }
                             }
-                          }
 
-                          return (
-                            <button
-                              key={opt.id}
-                              onClick={() => {
-                                setQuizAnswers(prev => ({ ...prev, [qIdx]: opt.id }));
-                              }}
-                              className={`p-3 rounded-xl border text-xs text-left transition-all flex items-start gap-2.5 cursor-pointer ${btnClass}`}
-                            >
-                              <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center font-mono font-bold text-[10px] shrink-0">
-                                {opt.id}
-                              </span>
-                              <span className="leading-snug">{opt.text}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                            return (
+                              <button
+                                key={opt.id}
+                                onClick={() => {
+                                  setQuizAnswers(prev => ({ ...prev, [qIdx]: opt.id }));
+                                }}
+                                className={`p-3 rounded-xl border text-xs text-left transition-all flex items-start gap-2.5 cursor-pointer ${btnClass}`}
+                              >
+                                <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center font-mono font-bold text-[10px] shrink-0">
+                                  {opt.id}
+                                </span>
+                                <span className="leading-snug">{opt.text}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* 옵션이 없는 서술형 퀴즈: 모범 답안 및 해설 확인 토글 버튼 */}
+                      {!hasOptions && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRevealedQuizAnswers(prev => ({ ...prev, [qIdx]: !prev[qIdx] }))}
+                            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${isRevealed
+                              ? "bg-emerald-600/30 border-emerald-500/50 text-emerald-200 shadow-md shadow-emerald-600/20"
+                              : "bg-white/5 hover:bg-white/10 border-white/10 text-gray-300"
+                              }`}
+                          >
+                            {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            <span>{isRevealed ? "모범 답안 및 해설 숨기기" : "모범 답안 및 해설 확인"}</span>
+                          </button>
+                        </div>
+                      )}
 
                       {/* 소크라테스 힌트 서랍 */}
                       {quiz.socratic_hints && quiz.socratic_hints.length > 0 && (
@@ -1819,16 +1934,25 @@ export default function DictionaryPage() {
                         </div>
                       )}
 
-                      {/* 정답 해설 */}
-                      {isSubmitted && (
-                        <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
-                          isCorrect ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200" : "bg-red-500/10 border-red-500/30 text-red-200"
-                        }`}>
+                      {/* 정답 및 해설 (4지선다는 제출 시, 서술형은 확인 버튼 클릭 시) */}
+                      {(hasOptions ? isSubmitted : isRevealed) && (
+                        <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${hasOptions
+                          ? (isCorrect ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200" : "bg-red-500/10 border-red-500/30 text-red-200")
+                          : "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
+                          }`}>
                           <div className="font-bold flex items-center gap-1.5">
-                            {isCorrect ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-red-400" />}
-                            <span>{isCorrect ? "정답입니다!" : `오답입니다 (정답: ${quiz.correct_option_id}번)`}</span>
+                            {hasOptions ? (
+                              isCorrect ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-red-400" />
+                            ) : (
+                              <Check className="w-4 h-4 text-emerald-400" />
+                            )}
+                            <span>
+                              {hasOptions
+                                ? (isCorrect ? "정답입니다!" : `오답입니다 (정답: ${quiz.correct_option_id}번)`)
+                                : "모범 답안 및 해설"}
+                            </span>
                           </div>
-                          <p className="text-gray-300 text-[11px] leading-relaxed pt-1">
+                          <p className="text-gray-300 text-[11px] leading-relaxed pt-1 whitespace-pre-wrap">
                             {quiz.explanation}
                           </p>
                         </div>
@@ -1976,11 +2100,10 @@ export default function DictionaryPage() {
                       </div>
                       <button
                         onClick={() => copySinglePrompt(promptText, "toc", "TOC(목차) JSON 추출")}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                          isCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20"
-                        }`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
+                          ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                          : "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20"
+                          }`}
                       >
                         {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{isCopied ? "복사 완료!" : "TOC 프롬프트 복사"}</span>
@@ -1999,8 +2122,13 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "flashcards") return null;
                 const promptText = getFlashcardPrompt(currentBookTitle, activePromptUnit);
+                const metaPromptText = getMetaFlashcardPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "flashcards";
                 const isMetaCopied = copiedPromptKey === "metaFlashcards";
+                const isMetaActive = promptViewMode["flashcards"] === "meta";
+                const currentPromptText = isMetaActive ? metaPromptText : promptText;
+                const unitIndex = getUnitIndex(activePromptUnit);
+
                 return (
                   <div className="rounded-xl border border-purple-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -2014,33 +2142,74 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => copySinglePrompt(getMetaFlashcardPrompt(currentBookTitle, activePromptUnit), "metaFlashcards", `메타 플래시카드 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isMetaCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, flashcards: "meta" }));
+                            copySinglePrompt(metaPromptText, "metaFlashcards", `메타 플래시카드 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : isMetaActive
+                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
+                              : "bg-indigo-600/70 hover:bg-indigo-600 text-white shadow-indigo-600/20"
+                            }`}
+                          title="이 단원 메타 플래시카드 추출 프롬프트 표시 및 복사"
                         >
                           {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 메타 플래시카드 추출 프롬프트 복사"}</span>
+                          <span>{isMetaCopied ? "복사 완료!" : "이단원에서 메타플래시카드추출 프롬프트 복사"}</span>
                         </button>
                         <button
-                          onClick={() => copySinglePrompt(promptText, "flashcards", `플래시카드 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, flashcards: "standard" }));
+                            copySinglePrompt(promptText, "flashcards", `플래시카드 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : !isMetaActive
+                              ? "bg-purple-600 text-white ring-2 ring-purple-400 shadow-purple-600/30"
+                              : "bg-purple-600/70 hover:bg-purple-500 text-white shadow-purple-600/20"
+                            }`}
+                          title="이 단원 플래시카드 기본 프롬프트 표시 및 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
+                          <span>{isCopied ? "복사 완료!" : "이단원프롬프트복사"}</span>
                         </button>
                       </div>
                     </div>
+
+                    <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
+                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, flashcards: "standard" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-purple-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            이단원프롬프트
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, flashcards: "meta" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            메타 프롬프트
+                          </button>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-purple-300/80 font-mono">
+                        다운로드 파일: {unitIndex}-flashcards.json
+                      </span>
+                    </div>
+
                     <textarea
                       readOnly
-                      value={promptText}
-                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-purple-200 focus:outline-none select-all"
+                      value={currentPromptText}
+                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
+                        ? "border-indigo-500/40 text-indigo-200"
+                        : "border-white/10 text-purple-200"
+                        }`}
                     />
                   </div>
                 );
@@ -2050,8 +2219,13 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "quizzes") return null;
                 const promptText = getQuizPrompt(currentBookTitle, activePromptUnit);
+                const metaPromptText = getMetaQuizPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "quizzes";
                 const isMetaCopied = copiedPromptKey === "metaQuizzes";
+                const isMetaActive = promptViewMode["quizzes"] === "meta";
+                const currentPromptText = isMetaActive ? metaPromptText : promptText;
+                const unitIndex = getUnitIndex(activePromptUnit);
+
                 return (
                   <div className="rounded-xl border border-teal-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -2065,33 +2239,74 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => copySinglePrompt(getMetaQuizPrompt(currentBookTitle, activePromptUnit), "metaQuizzes", `메타 퀴즈 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isMetaCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, quizzes: "meta" }));
+                            copySinglePrompt(metaPromptText, "metaQuizzes", `메타 퀴즈 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : isMetaActive
+                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
+                              : "bg-indigo-600/70 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                            }`}
+                          title="이 단원 메타 퀴즈 추출 프롬프트 표시 및 복사"
                         >
                           {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 메타 퀴즈 추출 프롬프트 복사"}</span>
+                          <span>{isMetaCopied ? "복사 완료!" : "이 단원메타퀴즈 추출 프롬프트 복사"}</span>
                         </button>
                         <button
-                          onClick={() => copySinglePrompt(promptText, "quizzes", `퀴즈 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-teal-600 hover:bg-teal-500 text-white shadow-teal-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, quizzes: "standard" }));
+                            copySinglePrompt(promptText, "quizzes", `퀴즈 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : !isMetaActive
+                              ? "bg-teal-600 text-white ring-2 ring-teal-400 shadow-teal-600/30"
+                              : "bg-teal-600/70 hover:bg-teal-500 text-white shadow-teal-600/20"
+                            }`}
+                          title="이 단원 퀴즈 기본 프롬프트 표시 및 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
+                          <span>{isCopied ? "복사 완료!" : "이단원프롬프트복사"}</span>
                         </button>
                       </div>
                     </div>
+
+                    <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
+                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, quizzes: "standard" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-teal-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            이단원프롬프트
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, quizzes: "meta" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            메타 프롬프트
+                          </button>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-teal-300/80 font-mono">
+                        다운로드 파일: {unitIndex}-quizzes.json
+                      </span>
+                    </div>
+
                     <textarea
                       readOnly
-                      value={promptText}
-                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-teal-200 focus:outline-none select-all"
+                      value={currentPromptText}
+                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
+                        ? "border-indigo-500/40 text-indigo-200"
+                        : "border-white/10 text-teal-200"
+                        }`}
                     />
                   </div>
                 );
@@ -2101,8 +2316,13 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "index") return null;
                 const promptText = getIndexPrompt(currentBookTitle, activePromptUnit);
+                const metaPromptText = getMetaIndexPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "index";
                 const isMetaCopied = copiedPromptKey === "metaIndex";
+                const isMetaActive = promptViewMode["index"] === "meta";
+                const currentPromptText = isMetaActive ? metaPromptText : promptText;
+                const unitIndex = getUnitIndex(activePromptUnit);
+
                 return (
                   <div className="rounded-xl border border-blue-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -2116,33 +2336,74 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => copySinglePrompt(getMetaIndexPrompt(currentBookTitle, activePromptUnit), "metaIndex", `Meta 정보 색인 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isMetaCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, index: "meta" }));
+                            copySinglePrompt(metaPromptText, "metaIndex", `Meta 정보 색인 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : isMetaActive
+                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
+                              : "bg-indigo-600/70 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                            }`}
+                          title="meta 정보 색인 프롬프트 표시 및 복사"
                         >
                           {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "Meta 정보 색인"}</span>
+                          <span>{isMetaCopied ? "복사 완료!" : "meta 정보 색인"}</span>
                         </button>
                         <button
-                          onClick={() => copySinglePrompt(promptText, "index", `개념 색인 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, index: "standard" }));
+                            copySinglePrompt(promptText, "index", `개념 색인 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : !isMetaActive
+                              ? "bg-blue-600 text-white ring-2 ring-blue-400 shadow-blue-600/30"
+                              : "bg-blue-600/70 hover:bg-blue-500 text-white shadow-blue-600/20"
+                            }`}
+                          title="이 단원 개념 색인 기본 프롬프트 표시 및 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
                         </button>
                       </div>
                     </div>
+
+                    <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
+                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, index: "standard" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-blue-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            이단원프롬프트
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, index: "meta" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            메타 프롬프트
+                          </button>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-blue-300/80 font-mono">
+                        다운로드 파일: {unitIndex}-indices.json
+                      </span>
+                    </div>
+
                     <textarea
                       readOnly
-                      value={promptText}
-                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-blue-200 focus:outline-none select-all"
+                      value={currentPromptText}
+                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
+                        ? "border-indigo-500/40 text-indigo-200"
+                        : "border-white/10 text-blue-200"
+                        }`}
                     />
                   </div>
                 );
@@ -2152,8 +2413,13 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "dictionary") return null;
                 const promptText = getDictionaryPrompt(currentBookTitle, activePromptUnit);
+                const metaPromptText = getMetaDictionaryPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "dictionary";
                 const isMetaCopied = copiedPromptKey === "metaDictionary";
+                const isMetaActive = promptViewMode["dictionary"] === "meta";
+                const currentPromptText = isMetaActive ? metaPromptText : promptText;
+                const unitIndex = getUnitIndex(activePromptUnit);
+
                 return (
                   <div className="rounded-xl border border-orange-500/30 bg-black/40 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -2167,33 +2433,74 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => copySinglePrompt(getMetaDictionaryPrompt(currentBookTitle, activePromptUnit), "metaDictionary", `메타 딕셔너리 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isMetaCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, dictionary: "meta" }));
+                            copySinglePrompt(metaPromptText, "metaDictionary", `메타 딕셔너리 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : isMetaActive
+                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
+                              : "bg-indigo-600/70 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                            }`}
+                          title="이 단원 meta 딕셔너리 추출 프롬프트 표시 및 복사"
                         >
                           {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 메타 딕셔너리 추출 프롬프트 복사"}</span>
+                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 meta 딕셔너리 추출"}</span>
                         </button>
                         <button
-                          onClick={() => copySinglePrompt(promptText, "dictionary", `심층 딕셔너리 (${activePromptUnit.title})`)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
-                            isCopied
-                              ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                              : "bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/20"
-                          }`}
+                          onClick={() => {
+                            setPromptViewMode(prev => ({ ...prev, dictionary: "standard" }));
+                            copySinglePrompt(promptText, "dictionary", `심층 딕셔너리 (${activePromptUnit.title})`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
+                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                            : !isMetaActive
+                              ? "bg-orange-600 text-white ring-2 ring-orange-400 shadow-orange-600/30"
+                              : "bg-orange-600/70 hover:bg-orange-500 text-white shadow-orange-600/20"
+                            }`}
+                          title="이 단원 딕셔너리 기본 프롬프트 표시 및 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
                         </button>
                       </div>
                     </div>
+
+                    <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
+                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, dictionary: "standard" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-orange-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            이단원프롬프트
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPromptViewMode(prev => ({ ...prev, dictionary: "meta" }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                              }`}
+                          >
+                            메타 프롬프트
+                          </button>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-orange-300/80 font-mono">
+                        다운로드 파일: {unitIndex}-dictionary.json
+                      </span>
+                    </div>
+
                     <textarea
                       readOnly
-                      value={promptText}
-                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-orange-200 focus:outline-none select-all"
+                      value={currentPromptText}
+                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
+                        ? "border-indigo-500/40 text-indigo-200"
+                        : "border-white/10 text-orange-200"
+                        }`}
                     />
                   </div>
                 );
@@ -2279,13 +2586,12 @@ export default function DictionaryPage() {
       {/* ── 7. 토스트 알림 ── */}
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 px-4 py-2.5 rounded-xl text-xs font-bold shadow-2xl z-50 flex items-center gap-2 ${
-            toast.type === "error"
-              ? "bg-red-500/90 text-white border border-red-500"
-              : toast.type === "info"
+          className={`fixed bottom-6 right-6 px-4 py-2.5 rounded-xl text-xs font-bold shadow-2xl z-50 flex items-center gap-2 ${toast.type === "error"
+            ? "bg-red-500/90 text-white border border-red-500"
+            : toast.type === "info"
               ? "bg-blue-600/90 text-white border border-blue-500"
               : "bg-emerald-500/90 text-white border border-emerald-500"
-          }`}
+            }`}
         >
           {toast.type === "error" ? <AlertTriangle className="w-4 h-4" /> : <Check className="w-4 h-4" />}
           <span>{toast.msg}</span>
