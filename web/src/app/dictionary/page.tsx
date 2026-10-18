@@ -54,7 +54,7 @@ const MATHPIX_LABEL: Record<ConvertLogView["status"] | "none", string> = {
   completed: "MD 전환 완료",
   saved: "저장 완료",
 };
-type PromptTaskKey = "toc" | "flashcards" | "metaFlashcards" | "quizzes" | "metaQuizzes" | "index" | "metaIndex" | "dictionary" | "metaDictionary";
+type PromptTaskKey = "toc" | "flashcards" | "quizzes" | "index" | "dictionary";
 
 // ── 0. TOC 목차 JSON 추출 프롬프트 생성 헬퍼 ──
 function getTocExtractionPrompt(bookTitle: string) {
@@ -101,30 +101,55 @@ function getUnitIndex(unit: TocUnitRange): number {
 // ── 단원별 4대 개별 프롬프트 생성 헬퍼 ──
 function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
   const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 핵심 개념/공식 플래시카드를 JSON 배열 형식으로 추출하고, ${index}-flashcards.json으로 다운로드 받도록 해줘.
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인 항목을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 플래시카드를 하나의 JSON 배열 형식으로 추출하고, ${index}-flashcards.json으로 다운로드 받도록 해줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
 - 반드시 해당 단원 범위 내의 내용만을 바탕으로 추출할 것.
+- 각 카드의 domain과 category는 근거가 된 색인 항목의 값을 그대로 따를 것.
+- "수학 내적" 카드는 핵심 개념·정의·공식을 묻고, "수학 외적" 카드는 인물·유래, 전략의 이름이나 적용 상황 등 메타 정보를 기억하고 활용하도록 물을 것.
+- "수학 외적" 카드는 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 정보를 외부 지식으로 지어내지 말 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
 - 추출된 결과는 사용자가 ${index}-flashcards.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
+공통 필드 (모든 항목):
 - chapter_title: "${unit.title}" (단원명)
+- domain: "수학 내적" 또는 "수학 외적" (색인 값 그대로)
+- category: 색인의 category 값 그대로
 - front: 핵심 질문, 개념/정의 명칭, 또는 빈칸 채우기
-- back: 명쾌한 정답, 공식, 핵심 설명 (수식은 LaTeX $...$ 표기)
+- back: 명쾌한 정답, 공식, 핵심 설명 (수식은 LaTeX $...$ 표기, "수학 외적"은 교재 서술에 근거한 1~2문장)
 - hint: 기억을 돕는 가벼운 힌트 (1줄)
-- formula: 대표 수식 (없으면 빈 문자열)
 - pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+"수학 내적" 전용 필드:
+- formula: 대표 수식 (없으면 빈 문자열)
+
+"수학 외적" 전용 필드:
+- scope: 색인의 scope 값 그대로 ("범교과" 또는 "수학특화")
+- related_math_terms: 연결되는 같은 단원의 "수학 내적" term 배열 (없으면 [])
 
 [출력 JSON 예시]
 [
   {
     "chapter_title": "${unit.title}",
+    "domain": "수학 내적",
+    "category": "성질",
     "front": "지수법칙에서 $a^0$의 값은? (단, $a \\neq 0$)",
     "back": "1",
     "hint": "모든 0이 아닌 수의 0제곱",
     "formula": "$a^0 = 1$",
+    "pages": [${unit.startPage}]
+  },
+  {
+    "chapter_title": "${unit.title}",
+    "domain": "수학 외적",
+    "category": "역사·유래",
+    "front": "로그를 처음 고안한 수학자와 그 목적은?",
+    "back": "네이피어(John Napier). 천문학 계산의 복잡한 곱셈을 덧셈으로 바꿔 간단히 하기 위해 고안했다.",
+    "hint": "곱셈 → 덧셈",
+    "scope": "수학특화",
+    "related_math_terms": ["로그"],
     "pages": [${unit.startPage}]
   }
 ]
@@ -139,40 +164,43 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
 
 [단원 지정 및 문항 구성 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
-- 반드시 제공하는 단원 딕셔너리의 핵심 개념·정의·공식·오개념을 바탕으로 문제를 구성할 것.
+- 반드시 제공하는 단원 딕셔너리의 정의·공식·오개념·배경·적용 사례를 바탕으로 문제를 구성할 것.
+- 각 문항의 domain과 category는 근거가 된 딕셔너리 항목의 값을 그대로 따를 것.
+- "수학 외적" 문항은 단순 암기(인물·연도)보다 "이 상황에 어떤 전략/학습법이 적절한가", "이 개념이 왜 등장했는가"처럼 이해와 적용을 묻는 문항을 우선하고, 교재 서술에 근거할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
-- 1벌: 제공하는 딕셔너리를 기준으로 개념 이해도를 정밀 평가하는 4지선다형 퀴즈 
+- 1벌: 제공하는 딕셔너리를 기준으로 개념 이해도를 정밀 평가하는 4지선다형 퀴즈
 - 2벌: 위 4지선다형 퀴즈를 서술형으로 전환한 퀴즈 (각 4지선다 문항과 1:1 대응되는 서술형 퀴즈)
 - 총 2벌의 퀴즈를 하나의 JSON 배열에 순차적으로 작성할 것.
-- 각 퀴즈에 대하여 3단계 소크라테스식 힌트(Level 1 개념 상기, Level 2 오개념 반문, Level 3 단계별 유도)를 반드시 포함할 것.
+- 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 반드시 포함할 것.
+  - "수학 내적": Level 1 개념 상기(딕셔너리 기본 정의/정리 상기), Level 2 오개념 반문(자주 범하는 실수나 잘못된 가정), Level 3 단계별 유도(정답 도출의 핵심 단계)
+  - "수학 외적": Level 1 맥락 상기(관련 유래·전략·학습법의 핵심), Level 2 오해 반문(자주 혼동하는 전략·인물·제도), Level 3 단계별 유도(정답을 고르는 핵심 판단 기준)
 - 생성된 결과는 사용자가 ${index}-quizzes.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
-1. 4지선다형 문항 규격:
+공통 필드 (모든 문항):
 - chapter_title: "${unit.title}" (단원명)
-- quiz_type: "multiple_choice" (4지선다형)
-- question: 4지선다 문제 내용 (수식은 LaTeX $...$ 표기)
-- options: 4개의 선택지 배열 [{ "id": 1, "text": "선택지 내용" }, ...]
-- correct_option_id: 정답 번호 (1~4)
-- explanation: 상세한 풀이 및 정답 근거
-- socratic_hints: 오답 시 학생의 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
-  - Level 1 (개념 상기): 문제 해결에 필요한 딕셔너리 기본 정의/정리 상기 유도
-  - Level 2 (오개념 반문): 자주 범하는 실수나 잘못된 가정을 짚는 질문
-  - Level 3 (단계별 유도): 정답 도출의 핵심 단계를 밟아가도록 돕는 하위 질문
-- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
-
-2. 서술형 문항 규격 (4지선다에서 전환):
-- chapter_title: "${unit.title}" (단원명)
-- quiz_type: "descriptive" (서술형)
-- question: 같은 개념을 풀이 과정·근거와 함께 서술하도록 요구하는 질문 (수식은 LaTeX $...$ 표기)
-- explanation: 모범 답안 및 상세 채점 기준/풀이 근거
+- domain: "수학 내적" 또는 "수학 외적" (딕셔너리 값 그대로)
+- category: 딕셔너리의 category 값 그대로
+- quiz_type: "multiple_choice" (4지선다형) 또는 "descriptive" (서술형)
+- question: 문제 내용 (수식은 LaTeX $...$ 표기). 서술형은 같은 개념·맥락을 풀이 과정·근거와 함께 서술하도록 요구
+- explanation: 4지선다형은 상세한 풀이 및 정답 근거(오답 선택지가 틀린 이유 포함), 서술형은 모범 답안 및 상세 채점 기준/풀이 근거
 - socratic_hints: 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
 - pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+4지선다형(multiple_choice) 전용 필드:
+- options: 4개의 선택지 배열 [{ "id": 1, "text": "선택지 내용" }, ...]
+- correct_option_id: 정답 번호 (1~4)
+
+"수학 외적" 전용 필드:
+- scope: 딕셔너리의 scope 값 그대로 ("범교과" 또는 "수학특화")
+- related_math_terms: 연결되는 같은 단원의 "수학 내적" term 배열 (없으면 [])
 
 [출력 JSON 예시]
 [
   {
     "chapter_title": "${unit.title}",
+    "domain": "수학 내적",
+    "category": "정의",
     "quiz_type": "multiple_choice",
     "question": "다음 중 지수함수 $y=2^x$의 성질로 옳은 것은?",
     "options": [
@@ -192,6 +220,8 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
   },
   {
     "chapter_title": "${unit.title}",
+    "domain": "수학 내적",
+    "category": "정의",
     "quiz_type": "descriptive",
     "question": "지수함수 $y=2^x$의 정의역, 치역, 점근선을 각각 구하고 그 이유를 풀이 과정과 함께 서술하시오.",
     "explanation": "모든 실수 $x$에 대해 $2^x$가 정의되므로 정의역은 실수 전체의 집합이다. $2^x>0$이고 모든 양수 값을 가지므로 치역은 양의 실수 전체의 집합이다. $x \\to -\\infty$일 때 $2^x \\to 0$이므로 점근선은 $x$축($y=0$)이다.",
@@ -201,209 +231,12 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
       "$2^x$의 값이 음수가 될 수 있는지 치역과 정의역을 구분해 보세요."
     ],
     "pages": [${unit.startPage}]
-  }
-]
-
-반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-quizzes.json으로 다운로드 받도록 해줘.`;
-}
-
-function getIndexPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 모든 수학 용어, 개념, 정리(Theorem)의 색인(Index)을 JSON 배열로 추출하고, ${index}-indices.json으로 다운로드 받도록 해줘.
-
-[단원 지정 규칙]
-- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
-- 해당 단원 페이지에 등장하는 모든 중요 개념어 및 용어를 누락 없이 색인화할 것.
-- 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
-- 추출된 결과는 사용자가 ${index}-indices.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
-
-[필드 규격]
-- chapter_title: "${unit.title}" (단원명)
-- term: 용어/개념명
-- category: 정의 / 정리 / 공식 / 성질 / 방법 중 하나
-- definition: 1~2문장의 간결하고 명확한 핵심 정의
-- formula: 대표 수식 (없으면 빈 문자열)
-- pages: 실제 등장한 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
-
-[출력 JSON 예시]
-[
-  {
-    "chapter_title": "${unit.title}",
-    "term": "지수함수",
-    "category": "정의",
-    "definition": "실수 $x$에 대하여 $y=a^x$ ($a>0, a \\neq 1$) 꼴로 나타내어지는 함수",
-    "formula": "$y = a^x$",
-    "pages": [${unit.startPage}]
-  }
-]
-
-반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-indices.json으로 다운로드 받도록 해줘.`;
-}
-
-// ── 메타 정보(유래·교육과정·학습법·문제해결 전략 등) 프롬프트 공통 규칙 ──
-function getMetaRules(unit: TocUnitRange) {
-  return `[단원 지정 규칙]
-- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
-- 본문뿐 아니라 단원 도입글, 학습 목표, 읽기 자료, 수학자 이야기, 쉬어가기/탐구 활동 박스, 교사용 지도 노트, 평가 안내 등 주변 서술까지 빠짐없이 살필 것.
-- 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
-
-[수학 콘텐츠와의 경계 규칙 — 반드시 지킬 것]
-- 수학적 정의·정리·공식·성질을 가진 용어(예: 지수함수, 피타고라스 정리, 수학적 귀납법)는 제외할 것. 그런 내용은 별도의 수학 프롬프트로 추출한다.
-- 같은 이름이라도 관점이 다르면 메타로 분류한다.
-  · "피타고라스 정리"는 제외(수학)하고, "피타고라스(인물)"와 "피타고라스 학파"는 포함(역사·유래)한다.
-  · "수학적 귀납법"은 제외(증명법)하고, "귀납적 추론(사고 전략)"은 포함(문제해결 전략)한다.
-- 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 유래·연도·인물 정보를 외부 지식으로 지어내지 말 것.
-- 해당 단원에 메타 정보가 없으면 빈 배열 []을 출력할 것.
-
-[메타 분류 기준]
-- category: 다음 7개 중 하나
-  · 역사·유래: 수학자, 학파, 개념의 기원, 어원, 기호의 유래
-  · 교육과정·정책: 교육과정, 성취기준, 평가·입시 제도, 교육 정책
-  · 학습법: 학습 전략, 메타인지, 오답 관리, 복습법, 학습 습관
-  · 문제해결 전략: 폴리아 4단계, 거꾸로 풀기, 특수화·일반화, 표 만들기 같은 범용 휴리스틱
-  · 교수법: 수업 모형, 표현 방식(구체물→반구체물→추상), 교구, 발문 기법
-  · 응용·맥락: 실생활 활용 사례, 타 교과·산업·기술과의 연계
-  · 태도·역량: 문제해결, 추론, 의사소통, 연결, 정보처리 같은 교과 역량, 수학적 태도·흥미·자신감
-- scope: "범교과" (모든 학습에 통용) 또는 "수학특화" (수학 학습에만 해당)`;
-}
-
-function getMetaIndexPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 "수학 개념 그 자체"가 아닌, 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 해당하는 용어의 색인(Index)을 JSON 배열로 추출하고, ${index}-indices.json으로 다운로드 받도록 해줘.
-
-${getMetaRules(unit)}
-- 추출된 결과는 사용자가 ${index}-indices.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
-
-[필드 규격]
-- chapter_title: "${unit.title}" (단원명)
-- term: 메타 용어명 (인물명, 제도명, 전략명, 교수법명, 어원 등)
-- category: 위 [메타 분류 기준]의 7개 중 하나
-- scope: "범교과" 또는 "수학특화"
-- definition: 교재 서술을 바탕으로 한 1~2문장 설명
-- related_math_terms: 이 메타 용어가 연결되는 같은 단원의 수학 용어 배열 (KG 말단 노드 연결용, 없으면 [])
-- evidence: 근거가 되는 교재 문장 일부 (30자 이내 요약 또는 발췌)
-- pages: 실제 등장한 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
-
-[출력 JSON 예시]
-[
-  {
-    "chapter_title": "${unit.title}",
-    "term": "네이피어(John Napier)",
-    "category": "역사·유래",
-    "scope": "수학특화",
-    "definition": "천문학 계산의 곱셈을 덧셈으로 바꾸기 위해 로그를 고안한 17세기 스코틀랜드의 수학자",
-    "related_math_terms": ["로그", "상용로그"],
-    "evidence": "복잡한 천문 계산을 간단히 하기 위해 로그를 발명",
-    "pages": [${unit.startPage}]
   },
   {
     "chapter_title": "${unit.title}",
-    "term": "거꾸로 풀기",
-    "category": "문제해결 전략",
-    "scope": "범교과",
-    "definition": "구하려는 결과에서 출발해 조건 쪽으로 역방향으로 추론하는 문제해결 전략",
-    "related_math_terms": ["지수방정식"],
-    "evidence": "결론에서 거슬러 올라가 조건을 찾아보자",
-    "pages": [${unit.startPage}]
-  }
-]
-
-반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-indices.json으로 다운로드 받도록 해줘.`;
-}
-
-function getMetaFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인을 모두 사용하여 "수학 개념 그 자체"가 아닌 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)를 학생이 기억하고 활용할 수 있도록 플래시카드를 JSON 배열 형식으로 추출하고, ${index}-flashcards.json으로 다운로드 받도록 해줘.
-
-${getMetaRules(unit)}
-- 추출된 결과는 사용자가 ${index}-flashcards.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
-
-[필드 규격]
-- chapter_title: "${unit.title}" (단원명)
-- category: 위 [메타 분류 기준]의 7개 중 하나
-- scope: "범교과" 또는 "수학특화"
-- front: 핵심 질문 (예: 인물·유래 묻기, 전략의 이름이나 적용 상황 묻기, 빈칸 채우기)
-- back: 교재 서술에 근거한 명쾌한 답 (1~2문장)
-- hint: 기억을 돕는 가벼운 힌트 (1줄)
-- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (없으면 [])
-- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
-
-[출력 JSON 예시]
-[
-  {
-    "chapter_title": "${unit.title}",
+    "domain": "수학 외적",
     "category": "역사·유래",
-    "scope": "수학특화",
-    "front": "로그를 처음 고안한 수학자와 그 목적은?",
-    "back": "네이피어(John Napier). 천문학 계산의 복잡한 곱셈을 덧셈으로 바꿔 간단히 하기 위해 고안했다.",
-    "hint": "곱셈 → 덧셈",
-    "related_math_terms": ["로그"],
-    "pages": [${unit.startPage}]
-  },
-  {
-    "chapter_title": "${unit.title}",
-    "category": "문제해결 전략",
-    "scope": "범교과",
-    "front": "구하려는 결과에서 출발해 조건 쪽으로 거슬러 추론하는 전략의 이름은?",
-    "back": "거꾸로 풀기. 결론이 분명하고 조건이 여러 단계로 얽힌 문제에 효과적이다.",
-    "hint": "결론 → 조건",
-    "related_math_terms": [],
-    "pages": [${unit.startPage}]
-  }
-]
-
-반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-flashcards.json으로 다운로드 받도록 해줘.`;
-}
-
-function getMetaQuizPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
-
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원의 ${index}-dictionary.json의 내용을 모두 사용하여 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대해 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성하고, ${index}-quizzes.json으로 다운로드 받도록 해줘.
-
-${getMetaRules(unit)}
-- 생성된 결과는 사용자가 ${index}-quizzes.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
-
-[문항 구성 규칙]
-- 단순 암기(인물·연도)보다 "이 상황에 어떤 전략/학습법이 적절한가", "이 개념이 왜 등장했는가"처럼 이해와 적용을 묻는 문항을 우선할 것.
-- 1벌: 제공하는 딕셔너리 기준 메타 4지선다형 퀴즈
-- 2벌: 위 4지선다형 퀴즈를 메타 서술형(이유·맥락·전략 서술)으로 전환한 퀴즈
-- 총 2벌의 퀴즈를 하나의 JSON 배열에 순차적으로 담을 것.
-
-[필드 규격]
-1. 4지선다형 문항 규격:
-- chapter_title: "${unit.title}" (단원명)
-- quiz_type: "multiple_choice" (4지선다형)
-- category: 위 [메타 분류 기준]의 7개 중 하나
-- scope: "범교과" 또는 "수학특화"
-- question: 4지선다 문제 내용
-- options: 4개의 선택지 배열 [{ "id": 1, "text": "선택지 내용" }, ...]
-- correct_option_id: 정답 번호 (1~4)
-- explanation: 정답 근거 및 오답 선택지가 틀린 이유
-- socratic_hints: 오답 시 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
-  - Level 1 (맥락 상기): 관련 유래·전략·학습법의 핵심을 떠올리게 하는 질문
-  - Level 2 (오해 반문): 자주 혼동하는 전략·인물·제도를 짚는 질문
-  - Level 3 (단계별 유도): 정답을 고르는 핵심 판단 기준으로 이끄는 하위 질문
-- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (없으면 [])
-- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
-
-2. 서술형 문항 규격 (4지선다에서 전환):
-- chapter_title: "${unit.title}" (단원명)
-- quiz_type: "descriptive" (서술형)
-- category: 위 [메타 분류 기준]의 7개 중 하나
-- scope: "범교과" 또는 "수학특화"
-- question: 같은 맥락을 근거와 함께 서술하도록 요구하는 질문
-- explanation: 교재 서술에 근거한 모범 답안 및 해설 (2~4문장)
-- socratic_hints: 생각을 순차 유도할 3단계 소크라테스식 질문/힌트 배열
-- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (없으면 [])
-- pages: 출처 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
-
-[출력 JSON 예시]
-[
-  {
-    "chapter_title": "${unit.title}",
     "quiz_type": "multiple_choice",
-    "category": "역사·유래",
-    "scope": "수학특화",
     "question": "네이피어가 로그를 고안한 주된 목적으로 옳은 것은?",
     "options": [
       { "id": 1, "text": "함수의 그래프를 그리기 위해" },
@@ -418,21 +251,7 @@ ${getMetaRules(unit)}
       "로그의 성질 $\\log_a xy = \\log_a x + \\log_a y$는 어떤 연산을 어떤 연산으로 바꾸나요?",
       "곱셈을 덧셈으로 바꾸면 손계산이 어떻게 달라지는지 생각해 보세요."
     ],
-    "related_math_terms": ["로그"],
-    "pages": [${unit.startPage}]
-  },
-  {
-    "chapter_title": "${unit.title}",
-    "quiz_type": "descriptive",
-    "category": "역사·유래",
     "scope": "수학특화",
-    "question": "네이피어가 로그를 고안한 배경을 설명하고, 로그의 어떤 성질이 그 목적을 달성하게 했는지 서술하시오.",
-    "explanation": "17세기 천문학에서는 큰 수의 복잡한 곱셈 계산이 매우 많았습니다. 네이피어는 곱셈을 덧셈으로 바꾸는 로그의 성질($\\log_a xy = \\log_a x + \\log_a y$)을 이용하여 천문 계산을 대폭 단순화하기 위해 로그를 고안했습니다.",
-    "socratic_hints": [
-      "17세기 과학자들이 가장 많이 시간을 들인 계산은 어떤 종류였을까요?",
-      "로그의 성질 $\\log_a xy = \\log_a x + \\log_a y$는 어떤 연산을 어떤 연산으로 바꾸나요?",
-      "곱셈을 덧셈으로 바꾸면 손계산이 어떻게 달라지는지 생각해 보세요."
-    ],
     "related_math_terms": ["로그"],
     "pages": [${unit.startPage}]
   }
@@ -441,85 +260,138 @@ ${getMetaRules(unit)}
 반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-quizzes.json으로 다운로드 받도록 해줘.`;
 }
 
-function getMetaDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
+function getIndexPrompt(bookTitle: string, unit: TocUnitRange) {
   const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인을 모두 사용하여 이 단원에 등장하는 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)에 대해 깊이 있는 메타 딕셔너리 항목들을 JSON 배열로 작성하고, ${index}-dictionary.json으로 다운로드 받도록 해줘.
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 용어의 색인(Index)을 아래 두 domain으로 구분하여 하나의 JSON 배열로 추출하고, ${index}-indices.json으로 다운로드 받도록 해줘.
+- "수학 내적": 수학 용어, 개념, 정리(Theorem), 공식 등 수학 개념 그 자체
+- "수학 외적": 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)
 
-${getMetaRules(unit)}
-- 작성된 결과는 사용자가 ${index}-dictionary.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
+[단원 지정 규칙]
+- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
+- 본문뿐 아니라 단원 도입글, 학습 목표, 읽기 자료, 수학자 이야기, 쉬어가기/탐구 활동 박스, 교사용 지도 노트, 평가 안내 등 주변 서술까지 빠짐없이 살필 것.
+- 해당 단원 페이지에 등장하는 모든 중요 용어를 누락 없이 색인화할 것.
+- 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
+- 추출된 결과는 사용자가 ${index}-indices.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
+
+[domain 경계 규칙 — 반드시 지킬 것]
+- 수학적 정의·정리·공식·성질을 가진 용어(예: 지수함수, 피타고라스 정리, 수학적 귀납법)는 "수학 내적"으로 분류할 것.
+- 같은 이름이라도 관점이 다르면 "수학 외적"으로 분류한다.
+  · "피타고라스 정리"는 수학 내적, "피타고라스(인물)"와 "피타고라스 학파"는 수학 외적(역사·유래)이다.
+  · "수학적 귀납법"은 수학 내적(증명법), "귀납적 추론(사고 전략)"은 수학 외적(문제해결 전략)이다.
+- 하나의 용어는 하나의 domain에만 넣을 것 (중복 금지).
+- 수학 외적 항목은 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 유래·연도·인물 정보를 외부 지식으로 지어내지 말 것.
+
+[수학 내적 분류 기준]
+- category: 정의 / 정리 / 공식 / 성질 / 방법 중 하나
+
+[수학 외적 분류 기준]
+${getMetaCategoryRules()}
 
 [필드 규격]
+공통 필드 (모든 항목):
 - chapter_title: "${unit.title}" (단원명)
-- term: 한글 용어명 (인물명, 제도명, 전략명, 교수법명, 어원 등)
-- english_term: 영문 용어명 (없으면 빈 문자열)
-- category: 위 [메타 분류 기준]의 7개 중 하나
+- domain: "수학 내적" 또는 "수학 외적"
+- term: 용어명 (수학 외적이면 인물명, 제도명, 전략명, 교수법명, 어원 등)
+- category: domain별 분류 기준 중 하나
+- definition: 1~2문장의 간결하고 명확한 핵심 정의/설명 (수학 외적은 교재 서술 기반)
+- pages: 실제 등장한 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+"수학 내적" 전용 필드:
+- formula: 대표 수식 (없으면 빈 문자열)
+
+"수학 외적" 전용 필드:
 - scope: "범교과" 또는 "수학특화"
-- definition: 교재 서술을 바탕으로 한 명확한 정의/설명
-- background: 유래, 등장 배경, 역사적·교육적 맥락
-- educational_significance: 이 메타 정보가 학습자에게 갖는 의미 (왜 알아야 하는가)
-- application: 학습자/교사가 실제로 활용하는 방법 (절차나 단계가 있으면 순서대로)
-- misconceptions: 자주 혼동하거나 잘못 이해하는 점 배열 (문자열 배열, 없으면 [])
-- examples: 교재 속 적용 사례 배열 [{ "situation": "적용 상황", "description": "어떻게 적용되는지" }]
-- related_math_terms: 연결되는 같은 단원의 수학 용어 배열 (KG 말단 노드 연결용, 없으면 [])
-- related_meta_terms: 함께 알아두면 좋은 다른 메타 용어 배열 (없으면 [])
+- related_math_terms: 이 용어가 연결되는 같은 단원의 "수학 내적" term 배열 (KG 말단 노드 연결용, 없으면 [])
 - evidence: 근거가 되는 교재 문장 일부 (30자 이내 요약 또는 발췌)
-- pages: 관련 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
 
 [출력 JSON 예시]
 [
   {
     "chapter_title": "${unit.title}",
-    "term": "거꾸로 풀기",
-    "english_term": "working backwards",
-    "category": "문제해결 전략",
-    "scope": "범교과",
-    "definition": "구하려는 결과나 결론에서 출발하여 그것이 성립하기 위한 조건을 역방향으로 찾아가는 문제해결 전략",
-    "background": "폴리아(G. Pólya)가 『어떻게 문제를 풀 것인가』에서 정리한 대표적인 발견술(heuristic) 중 하나로 소개된다.",
-    "educational_significance": "조건이 여러 단계로 얽힌 문제에서 출발점을 찾지 못할 때 사고의 방향을 전환하는 도구가 된다.",
-    "application": "1) 구하려는 값을 먼저 쓴다. 2) 그 값을 얻기 직전 단계에 필요한 조건을 쓴다. 3) 주어진 조건에 닿을 때까지 반복한다. 4) 순방향으로 다시 검산한다.",
-    "misconceptions": ["답을 미리 가정하고 대입하는 것과 같다고 오해하는 경우"],
-    "examples": [
-      { "situation": "지수방정식에서 최종 값이 주어진 경우", "description": "결과 식에서 출발해 밑을 같게 만드는 단계를 거슬러 올라가 미지수 조건을 찾는다." }
-    ],
-    "related_math_terms": ["지수방정식"],
-    "related_meta_terms": ["폴리아의 문제해결 4단계", "특수화와 일반화"],
-    "evidence": "결론에서 거슬러 올라가 조건을 찾아보자",
+    "domain": "수학 내적",
+    "term": "지수함수",
+    "category": "정의",
+    "definition": "실수 $x$에 대하여 $y=a^x$ ($a>0, a \\neq 1$) 꼴로 나타내어지는 함수",
+    "formula": "$y = a^x$",
+    "pages": [${unit.startPage}]
+  },
+  {
+    "chapter_title": "${unit.title}",
+    "domain": "수학 외적",
+    "term": "네이피어(John Napier)",
+    "category": "역사·유래",
+    "definition": "천문학 계산의 곱셈을 덧셈으로 바꾸기 위해 로그를 고안한 17세기 스코틀랜드의 수학자",
+    "scope": "수학특화",
+    "related_math_terms": ["로그", "상용로그"],
+    "evidence": "복잡한 천문 계산을 간단히 하기 위해 로그를 발명",
     "pages": [${unit.startPage}]
   }
 ]
 
-반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-dictionary.json으로 다운로드 받도록 해줘.`;
+반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-indices.json으로 다운로드 받도록 해줘.`;
+}
+
+// ── 수학 외적 category·scope 분류 기준 (색인 프롬프트용) ──
+function getMetaCategoryRules() {
+  return `- category: 다음 7개 중 하나
+  · 역사·유래: 수학자, 학파, 개념의 기원, 어원, 기호의 유래
+  · 교육과정·정책: 교육과정, 성취기준, 평가·입시 제도, 교육 정책
+  · 학습법: 학습 전략, 메타인지, 오답 관리, 복습법, 학습 습관
+  · 문제해결 전략: 폴리아 4단계, 거꾸로 풀기, 특수화·일반화, 표 만들기 같은 범용 휴리스틱
+  · 교수법: 수업 모형, 표현 방식(구체물→반구체물→추상), 교구, 발문 기법
+  · 응용·맥락: 실생활 활용 사례, 타 교과·산업·기술과의 연계
+  · 태도·역량: 문제해결, 추론, 의사소통, 연결, 정보처리 같은 교과 역량, 수학적 태도·흥미·자신감
+- scope: "범교과" (모든 학습에 통용) 또는 "수학특화" (수학 학습에만 해당)`;
 }
 
 function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
   const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 핵심 수학 개념들에 대해 ${index}-indices.json의 색인을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 JSON 배열로 작성하고, ${index}-dictionary.json으로 다운로드 받도록 해줘.
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 대해 ${index}-indices.json의 색인 항목을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 하나의 JSON 배열로 작성하고, ${index}-dictionary.json으로 다운로드 받도록 해줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
-- 해당 단원 내 핵심 개념들을 중심으로 정의부터 기하학적 의미, 오개념, 예제까지 포괄적으로 작성할 것.
+- 색인 항목 1개당 딕셔너리 항목 1개를 작성할 것. 각 항목의 domain과 category는 색인 값을 그대로 따를 것.
+- "수학 내적" 항목은 정의부터 기하학적 의미, 오개념, 예제까지 포괄적으로 작성할 것.
+- "수학 외적" 항목은 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 유래·연도·인물 정보를 외부 지식으로 지어내지 말 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
 - 작성된 결과는 사용자가 ${index}-dictionary.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
 
 [필드 규격]
+공통 필드 (모든 항목):
 - chapter_title: "${unit.title}" (단원명)
+- domain: "수학 내적" 또는 "수학 외적" (색인 값 그대로)
 - term: 한글 용어명
-- english_term: 영문 용어명
-- definition: 엄밀한 수학적 정의 및 기본 공식 ($...$ LaTeX)
+- english_term: 영문 용어명 (없으면 빈 문자열)
+- category: 색인의 category 값 그대로
+- definition: "수학 내적"은 엄밀한 수학적 정의 및 기본 공식 ($...$ LaTeX), "수학 외적"은 교재 서술을 바탕으로 한 명확한 정의/설명
+- misconceptions: 학생들이 자주 빠지는 오개념·혼동하는 점 배열 (문자열 배열, 없으면 [])
+- pages: 관련 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+"수학 내적" 전용 필드:
 - geometric_meaning: 기하학적 / 시각적 / 직관적 의미 설명
 - theorems: 관련 핵심 정리 배열 [{ "name": "정리 이름", "description": "설명" }]
-- misconceptions: 학생들이 자주 빠지는 오개념 및 주의할 점 배열 (문자열 배열)
 - examples: 대표 예제와 풀이 배열 [{ "problem": "문제 내용", "solution": "풀이 내용" }]
 - prerequisites: 선수 학습 개념 배열 (문자열 배열)
 - subsequent_concepts: 후속 학습 개념 배열 (문자열 배열)
-- pages: 관련 페이지 번호 배열 (p.${unit.startPage}~p.${unit.endPage} 내 정수)
+
+"수학 외적" 전용 필드:
+- scope: 색인의 scope 값 그대로 ("범교과" 또는 "수학특화")
+- background: 유래, 등장 배경, 역사적·교육적 맥락
+- educational_significance: 이 메타 정보가 학습자에게 갖는 의미 (왜 알아야 하는가)
+- application: 학습자/교사가 실제로 활용하는 방법 (절차나 단계가 있으면 순서대로)
+- examples: 교재 속 적용 사례 배열 [{ "situation": "적용 상황", "description": "어떻게 적용되는지" }]
+- related_math_terms: 연결되는 같은 단원의 "수학 내적" term 배열 (KG 말단 노드 연결용, 없으면 [])
+- related_meta_terms: 함께 알아두면 좋은 다른 "수학 외적" term 배열 (없으면 [])
+- evidence: 근거가 되는 교재 문장 일부 (30자 이내 요약 또는 발췌)
 
 [출력 JSON 예시]
 [
   {
     "chapter_title": "${unit.title}",
+    "domain": "수학 내적",
     "term": "지수함수",
     "english_term": "exponential function",
+    "category": "정의",
     "definition": "임의의 실수 $x$에 대하여 $a^x$ ($a>0, a \\neq 1$)를 대응시키는 함수 $y=a^x$",
     "geometric_meaning": "$a>1$일 때 $x$가 증가함에 따라 급격히 증가하며, $x$축($y=0$)을 점근선으로 가집니다.",
     "theorems": [
@@ -534,6 +406,26 @@ function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
     ],
     "prerequisites": ["거듭제곱근", "지수의 확장"],
     "subsequent_concepts": ["지수방정식", "로그함수"],
+    "pages": [${unit.startPage}]
+  },
+  {
+    "chapter_title": "${unit.title}",
+    "domain": "수학 외적",
+    "term": "거꾸로 풀기",
+    "english_term": "working backwards",
+    "category": "문제해결 전략",
+    "definition": "구하려는 결과나 결론에서 출발하여 그것이 성립하기 위한 조건을 역방향으로 찾아가는 문제해결 전략",
+    "misconceptions": ["답을 미리 가정하고 대입하는 것과 같다고 오해하는 경우"],
+    "scope": "범교과",
+    "background": "폴리아(G. Pólya)가 『어떻게 문제를 풀 것인가』에서 정리한 대표적인 발견술(heuristic) 중 하나로 소개된다.",
+    "educational_significance": "조건이 여러 단계로 얽힌 문제에서 출발점을 찾지 못할 때 사고의 방향을 전환하는 도구가 된다.",
+    "application": "1) 구하려는 값을 먼저 쓴다. 2) 그 값을 얻기 직전 단계에 필요한 조건을 쓴다. 3) 주어진 조건에 닿을 때까지 반복한다. 4) 순방향으로 다시 검산한다.",
+    "examples": [
+      { "situation": "지수방정식에서 최종 값이 주어진 경우", "description": "결과 식에서 출발해 밑을 같게 만드는 단계를 거슬러 올라가 미지수 조건을 찾는다." }
+    ],
+    "related_math_terms": ["지수방정식"],
+    "related_meta_terms": ["폴리아의 문제해결 4단계", "특수화와 일반화"],
+    "evidence": "결론에서 거슬러 올라가 조건을 찾아보자",
     "pages": [${unit.startPage}]
   }
 ]
@@ -577,7 +469,6 @@ export default function DictionaryPage() {
   const [promptTargetUnitId, setPromptTargetUnitId] = useState<string>("");
   const [promptOnlyTask, setPromptOnlyTask] = useState<PromptTaskKey | null>(null); // 탭의 '프롬프트 열기'는 그 탭 프롬프트만
   const [copiedPromptKey, setCopiedPromptKey] = useState<PromptTaskKey | null>(null);
-  const [promptViewMode, setPromptViewMode] = useState<Record<string, "standard" | "meta">>({});
 
   // ── NotebookLM 결과 직접 붙여넣기 모달 ──
   const [showPasteModal, setShowPasteModal] = useState(false);
@@ -826,7 +717,6 @@ export default function DictionaryPage() {
     const targetId = unitId || (selectedUnitId !== "all" ? selectedUnitId : tocUnits[0]?.id || "all");
     setPromptTargetUnitId(targetId);
     setCopiedPromptKey(null);
-    setPromptViewMode({});
     setShowPromptModal(true);
   };
 
@@ -2398,11 +2288,7 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "flashcards") return null;
                 const promptText = getFlashcardPrompt(currentBookTitle, activePromptUnit);
-                const metaPromptText = getMetaFlashcardPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "flashcards";
-                const isMetaCopied = copiedPromptKey === "metaFlashcards";
-                const isMetaActive = promptViewMode["flashcards"] === "meta";
-                const currentPromptText = isMetaActive ? metaPromptText : promptText;
                 const unitIndex = getUnitIndex(activePromptUnit);
 
                 return (
@@ -2418,33 +2304,12 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, flashcards: "meta" }));
-                            copySinglePrompt(metaPromptText, "metaFlashcards", `메타 플래시카드 (${activePromptUnit.title})`);
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : isMetaActive
-                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
-                              : "bg-indigo-600/70 hover:bg-indigo-600 text-white shadow-indigo-600/20"
-                            }`}
-                          title="이 단원 메타 플래시카드 추출 프롬프트 표시 및 복사"
-                        >
-                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "이단원에서 메타플래시카드추출 프롬프트 복사"}</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, flashcards: "standard" }));
-                            copySinglePrompt(promptText, "flashcards", `플래시카드 (${activePromptUnit.title})`);
-                          }}
+                          onClick={() => copySinglePrompt(promptText, "flashcards", `플래시카드 (${activePromptUnit.title})`)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
                             ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : !isMetaActive
-                              ? "bg-purple-600 text-white ring-2 ring-purple-400 shadow-purple-600/30"
-                              : "bg-purple-600/70 hover:bg-purple-500 text-white shadow-purple-600/20"
+                            : "bg-purple-600 text-white ring-2 ring-purple-400 shadow-purple-600/30"
                             }`}
-                          title="이 단원 플래시카드 기본 프롬프트 표시 및 복사"
+                          title="이 단원 플래시카드(수학 내적 + 수학 외적) 프롬프트 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{isCopied ? "복사 완료!" : "이단원프롬프트복사"}</span>
@@ -2453,27 +2318,7 @@ export default function DictionaryPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
-                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, flashcards: "standard" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-purple-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            이단원프롬프트
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, flashcards: "meta" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            메타 프롬프트
-                          </button>
-                        </div>
-                      </div>
+                      <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-purple-300/80 font-mono">
                         다운로드 파일: {unitIndex}-flashcards.json
                       </span>
@@ -2481,11 +2326,8 @@ export default function DictionaryPage() {
 
                     <textarea
                       readOnly
-                      value={currentPromptText}
-                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
-                        ? "border-indigo-500/40 text-indigo-200"
-                        : "border-white/10 text-purple-200"
-                        }`}
+                      value={promptText}
+                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-purple-200 focus:outline-none select-all"
                     />
                   </div>
                 );
@@ -2495,11 +2337,7 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "quizzes") return null;
                 const promptText = getQuizPrompt(currentBookTitle, activePromptUnit);
-                const metaPromptText = getMetaQuizPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "quizzes";
-                const isMetaCopied = copiedPromptKey === "metaQuizzes";
-                const isMetaActive = promptViewMode["quizzes"] === "meta";
-                const currentPromptText = isMetaActive ? metaPromptText : promptText;
                 const unitIndex = getUnitIndex(activePromptUnit);
 
                 return (
@@ -2515,33 +2353,12 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, quizzes: "meta" }));
-                            copySinglePrompt(metaPromptText, "metaQuizzes", `메타 퀴즈 (${activePromptUnit.title})`);
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : isMetaActive
-                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
-                              : "bg-indigo-600/70 hover:bg-indigo-500 text-white shadow-indigo-600/20"
-                            }`}
-                          title="이 단원 메타 퀴즈 추출 프롬프트 표시 및 복사"
-                        >
-                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "이 단원메타퀴즈 추출 프롬프트 복사"}</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, quizzes: "standard" }));
-                            copySinglePrompt(promptText, "quizzes", `퀴즈 (${activePromptUnit.title})`);
-                          }}
+                          onClick={() => copySinglePrompt(promptText, "quizzes", `퀴즈 (${activePromptUnit.title})`)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
                             ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : !isMetaActive
-                              ? "bg-teal-600 text-white ring-2 ring-teal-400 shadow-teal-600/30"
-                              : "bg-teal-600/70 hover:bg-teal-500 text-white shadow-teal-600/20"
+                            : "bg-teal-600 text-white ring-2 ring-teal-400 shadow-teal-600/30"
                             }`}
-                          title="이 단원 퀴즈 기본 프롬프트 표시 및 복사"
+                          title="이 단원 퀴즈(수학 내적 + 수학 외적) 프롬프트 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{isCopied ? "복사 완료!" : "이단원프롬프트복사"}</span>
@@ -2550,27 +2367,7 @@ export default function DictionaryPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
-                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, quizzes: "standard" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-teal-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            이단원프롬프트
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, quizzes: "meta" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            메타 프롬프트
-                          </button>
-                        </div>
-                      </div>
+                      <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-teal-300/80 font-mono">
                         다운로드 파일: {unitIndex}-quizzes.json
                       </span>
@@ -2578,11 +2375,8 @@ export default function DictionaryPage() {
 
                     <textarea
                       readOnly
-                      value={currentPromptText}
-                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
-                        ? "border-indigo-500/40 text-indigo-200"
-                        : "border-white/10 text-teal-200"
-                        }`}
+                      value={promptText}
+                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-teal-200 focus:outline-none select-all"
                     />
                   </div>
                 );
@@ -2592,11 +2386,7 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "index") return null;
                 const promptText = getIndexPrompt(currentBookTitle, activePromptUnit);
-                const metaPromptText = getMetaIndexPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "index";
-                const isMetaCopied = copiedPromptKey === "metaIndex";
-                const isMetaActive = promptViewMode["index"] === "meta";
-                const currentPromptText = isMetaActive ? metaPromptText : promptText;
                 const unitIndex = getUnitIndex(activePromptUnit);
 
                 return (
@@ -2612,33 +2402,12 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, index: "meta" }));
-                            copySinglePrompt(metaPromptText, "metaIndex", `Meta 정보 색인 (${activePromptUnit.title})`);
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : isMetaActive
-                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
-                              : "bg-indigo-600/70 hover:bg-indigo-500 text-white shadow-indigo-600/20"
-                            }`}
-                          title="meta 정보 색인 프롬프트 표시 및 복사"
-                        >
-                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "meta 정보 색인"}</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, index: "standard" }));
-                            copySinglePrompt(promptText, "index", `개념 색인 (${activePromptUnit.title})`);
-                          }}
+                          onClick={() => copySinglePrompt(promptText, "index", `개념 색인 (${activePromptUnit.title})`)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
                             ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : !isMetaActive
-                              ? "bg-blue-600 text-white ring-2 ring-blue-400 shadow-blue-600/30"
-                              : "bg-blue-600/70 hover:bg-blue-500 text-white shadow-blue-600/20"
+                            : "bg-blue-600 text-white ring-2 ring-blue-400 shadow-blue-600/30"
                             }`}
-                          title="이 단원 개념 색인 기본 프롬프트 표시 및 복사"
+                          title="이 단원 개념 색인(수학 내적 + 수학 외적) 프롬프트 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
@@ -2647,27 +2416,7 @@ export default function DictionaryPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
-                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, index: "standard" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-blue-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            이단원프롬프트
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, index: "meta" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            메타 프롬프트
-                          </button>
-                        </div>
-                      </div>
+                      <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-blue-300/80 font-mono">
                         다운로드 파일: {unitIndex}-indices.json
                       </span>
@@ -2675,11 +2424,8 @@ export default function DictionaryPage() {
 
                     <textarea
                       readOnly
-                      value={currentPromptText}
-                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
-                        ? "border-indigo-500/40 text-indigo-200"
-                        : "border-white/10 text-blue-200"
-                        }`}
+                      value={promptText}
+                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-blue-200 focus:outline-none select-all"
                     />
                   </div>
                 );
@@ -2689,11 +2435,7 @@ export default function DictionaryPage() {
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "dictionary") return null;
                 const promptText = getDictionaryPrompt(currentBookTitle, activePromptUnit);
-                const metaPromptText = getMetaDictionaryPrompt(currentBookTitle, activePromptUnit);
                 const isCopied = copiedPromptKey === "dictionary";
-                const isMetaCopied = copiedPromptKey === "metaDictionary";
-                const isMetaActive = promptViewMode["dictionary"] === "meta";
-                const currentPromptText = isMetaActive ? metaPromptText : promptText;
                 const unitIndex = getUnitIndex(activePromptUnit);
 
                 return (
@@ -2709,33 +2451,12 @@ export default function DictionaryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, dictionary: "meta" }));
-                            copySinglePrompt(metaPromptText, "metaDictionary", `메타 딕셔너리 (${activePromptUnit.title})`);
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isMetaCopied
-                            ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : isMetaActive
-                              ? "bg-indigo-600 text-white ring-2 ring-indigo-400 shadow-indigo-600/30"
-                              : "bg-indigo-600/70 hover:bg-indigo-500 text-white shadow-indigo-600/20"
-                            }`}
-                          title="이 단원 meta 딕셔너리 추출 프롬프트 표시 및 복사"
-                        >
-                          {isMetaCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{isMetaCopied ? "복사 완료!" : "이 단원 meta 딕셔너리 추출"}</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPromptViewMode(prev => ({ ...prev, dictionary: "standard" }));
-                            copySinglePrompt(promptText, "dictionary", `심층 딕셔너리 (${activePromptUnit.title})`);
-                          }}
+                          onClick={() => copySinglePrompt(promptText, "dictionary", `심층 딕셔너리 (${activePromptUnit.title})`)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${isCopied
                             ? "bg-emerald-600 text-white shadow-emerald-600/20"
-                            : !isMetaActive
-                              ? "bg-orange-600 text-white ring-2 ring-orange-400 shadow-orange-600/30"
-                              : "bg-orange-600/70 hover:bg-orange-500 text-white shadow-orange-600/20"
+                            : "bg-orange-600 text-white ring-2 ring-orange-400 shadow-orange-600/30"
                             }`}
-                          title="이 단원 딕셔너리 기본 프롬프트 표시 및 복사"
+                          title="이 단원 딕셔너리(수학 내적 + 수학 외적) 프롬프트 복사"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{isCopied ? "복사 완료!" : "이 단원 프롬프트 복사"}</span>
@@ -2744,27 +2465,7 @@ export default function DictionaryPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400 font-semibold text-[10px]">프롬프트 영역:</span>
-                        <div className="flex items-center gap-1 bg-black/60 p-0.5 rounded border border-white/10">
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, dictionary: "standard" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${!isMetaActive ? "bg-orange-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            이단원프롬프트
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPromptViewMode(prev => ({ ...prev, dictionary: "meta" }))}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${isMetaActive ? "bg-indigo-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                              }`}
-                          >
-                            메타 프롬프트
-                          </button>
-                        </div>
-                      </div>
+                      <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-orange-300/80 font-mono">
                         다운로드 파일: {unitIndex}-dictionary.json
                       </span>
@@ -2772,11 +2473,8 @@ export default function DictionaryPage() {
 
                     <textarea
                       readOnly
-                      value={currentPromptText}
-                      className={`w-full h-28 bg-black/60 border rounded-lg p-2.5 font-mono text-[11px] focus:outline-none select-all transition-colors ${isMetaActive
-                        ? "border-indigo-500/40 text-indigo-200"
-                        : "border-white/10 text-orange-200"
-                        }`}
+                      value={promptText}
+                      className="w-full h-28 bg-black/60 border border-white/10 rounded-lg p-2.5 font-mono text-[11px] text-orange-200 focus:outline-none select-all"
                     />
                   </div>
                 );
