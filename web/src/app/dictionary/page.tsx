@@ -25,7 +25,8 @@ import {
   EyeOff,
   Trash2,
   LayoutGrid,
-  List
+  List,
+  FolderUp
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import BookBars from "@/components/BookBars";
@@ -99,9 +100,9 @@ function getUnitIndex(unit: TocUnitRange): number {
 }
 
 // ── 단원별 4대 개별 프롬프트 생성 헬퍼 ──
-function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인 항목을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 플래시카드를 하나의 JSON 배열 형식으로 추출하고, ${index}-flashcards.json으로 다운로드 받도록 해줘.
+function getFlashcardPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const index = `${bookId}-${getUnitIndex(unit)}`;
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인 항목을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 플래시카드를 하나의 JSON 배열 형식으로 추출해 줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
@@ -110,7 +111,7 @@ function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
 - "수학 내적" 카드는 핵심 개념·정의·공식을 묻고, "수학 외적" 카드는 인물·유래, 전략의 이름이나 적용 상황 등 메타 정보를 기억하고 활용하도록 물을 것.
 - "수학 외적" 카드는 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 정보를 외부 지식으로 지어내지 말 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
-- 추출된 결과는 사용자가 ${index}-flashcards.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
+- 결과 JSON 파일은 응답 전체에서 한 번만 생성할 것 (같은 파일을 여러 번 만들지 말 것).
 
 [필드 규격]
 공통 필드 (모든 항목):
@@ -133,22 +134,13 @@ function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
 [
   {
     "chapter_title": "${unit.title}",
-    "domain": "수학 내적",
-    "category": "성질",
-    "front": "지수법칙에서 $a^0$의 값은? (단, $a \\neq 0$)",
-    "back": "1",
-    "hint": "모든 0이 아닌 수의 0제곱",
-    "formula": "$a^0 = 1$",
-    "pages": [${unit.startPage}]
-  },
-  {
-    "chapter_title": "${unit.title}",
     "domain": "수학 외적",
     "category": "역사·유래",
     "front": "로그를 처음 고안한 수학자와 그 목적은?",
     "back": "네이피어(John Napier). 천문학 계산의 복잡한 곱셈을 덧셈으로 바꿔 간단히 하기 위해 고안했다.",
     "hint": "곱셈 → 덧셈",
     "scope": "수학특화",
+    "formula": "$a^0 = 1$",
     "related_math_terms": ["로그"],
     "pages": [${unit.startPage}]
   }
@@ -157,10 +149,10 @@ function getFlashcardPrompt(bookTitle: string, unit: TocUnitRange) {
 반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-flashcards.json으로 다운로드 받도록 해줘.`;
 }
 
-function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
+function getQuizPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const index = `${bookId}-${getUnitIndex(unit)}`;
 
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage})에서 ${index}-dictionary.json의 딕셔너리의 내용을 모두 사용하여 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성하고, ${index}-quizzes.json으로 다운로드 받도록 해줘.
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage})에서 ${index}-dictionary.json의 딕셔너리의 내용을 모두 사용하여 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘.
 
 [단원 지정 및 문항 구성 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
@@ -174,7 +166,7 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
 - 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 반드시 포함할 것.
   - "수학 내적": Level 1 개념 상기(딕셔너리 기본 정의/정리 상기), Level 2 오개념 반문(자주 범하는 실수나 잘못된 가정), Level 3 단계별 유도(정답 도출의 핵심 단계)
   - "수학 외적": Level 1 맥락 상기(관련 유래·전략·학습법의 핵심), Level 2 오해 반문(자주 혼동하는 전략·인물·제도), Level 3 단계별 유도(정답을 고르는 핵심 판단 기준)
-- 생성된 결과는 사용자가 ${index}-quizzes.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
+- 결과 JSON 파일은 응답 전체에서 한 번만 생성할 것 (같은 파일을 여러 번 만들지 말 것).
 
 [필드 규격]
 공통 필드 (모든 문항):
@@ -202,55 +194,26 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
     "domain": "수학 내적",
     "category": "정의",
     "quiz_type": "multiple_choice",
-    "question": "다음 중 지수함수 $y=2^x$의 성질로 옳은 것은?",
+    "question": "지수함수 $y=2^x$의 성질로 옳은 것은?",
     "options": [
       { "id": 1, "text": "점근선은 $y$축이다." },
-      { "id": 2, "text": "정의역은 실수 전체의 집합이다." },
-      { "id": 3, "text": "치역은 실수 전체의 집합이다." },
-      { "id": 4, "text": "$x$가 증가할 때 $y$는 감소한다." }
+      { "id": 2, "text": "정의역은 실수 전체이다." },
+      { "id": 3, "text": "치역은 실수 전체이다." },
+      { "id": 4, "text": "감소함수이다." }
     ],
     "correct_option_id": 2,
-    "explanation": "지수함수 $y=2^x$는 정의역이 실수 전체이고 치역은 양의 실수 전체이며, 점근선은 $x$축($y=0$)입니다.",
-    "socratic_hints": [
-      "지수함수 $y=a^x$ ($a>1$)의 그래프 개형과 축과의 관계를 떠올려 보세요.",
-      "$x$ 자리에 음수나 0, 양수를 대입할 때 제한 조건이 있는지 확인해 보세요.",
-      "$2^x$의 값이 음수가 될 수 있는지 치역과 정의역을 구분해 보세요."
-    ],
-    "pages": [${unit.startPage}]
-  },
-  {
-    "chapter_title": "${unit.title}",
-    "domain": "수학 내적",
-    "category": "정의",
-    "quiz_type": "descriptive",
-    "question": "지수함수 $y=2^x$의 정의역, 치역, 점근선을 각각 구하고 그 이유를 풀이 과정과 함께 서술하시오.",
-    "explanation": "모든 실수 $x$에 대해 $2^x$가 정의되므로 정의역은 실수 전체의 집합이다. $2^x>0$이고 모든 양수 값을 가지므로 치역은 양의 실수 전체의 집합이다. $x \\to -\\infty$일 때 $2^x \\to 0$이므로 점근선은 $x$축($y=0$)이다.",
-    "socratic_hints": [
-      "지수함수 $y=a^x$ ($a>1$)의 그래프 개형과 축과의 관계를 떠올려 보세요.",
-      "$x$ 자리에 음수나 0, 양수를 대입할 때 제한 조건이 있는지 확인해 보세요.",
-      "$2^x$의 값이 음수가 될 수 있는지 치역과 정의역을 구분해 보세요."
-    ],
+    "explanation": "정의역은 실수 전체, 치역은 양의 실수, 점근선은 $x$축이다.",
+    "socratic_hints": ["그래프 개형을 떠올려 보세요.", "$2^x$가 음수가 될 수 있나요?", "정의역과 치역을 구분해 보세요."],
     "pages": [${unit.startPage}]
   },
   {
     "chapter_title": "${unit.title}",
     "domain": "수학 외적",
     "category": "역사·유래",
-    "quiz_type": "multiple_choice",
-    "question": "네이피어가 로그를 고안한 주된 목적으로 옳은 것은?",
-    "options": [
-      { "id": 1, "text": "함수의 그래프를 그리기 위해" },
-      { "id": 2, "text": "천문학의 복잡한 곱셈 계산을 덧셈으로 바꾸기 위해" },
-      { "id": 3, "text": "무리수의 존재를 증명하기 위해" },
-      { "id": 4, "text": "확률을 계산하기 위해" }
-    ],
-    "correct_option_id": 2,
-    "explanation": "로그는 큰 수의 곱셈을 지수의 덧셈으로 바꾸어 천문 계산을 간단히 하려고 고안되었습니다. 나머지 선택지는 로그의 발명 동기와 관련이 없습니다.",
-    "socratic_hints": [
-      "17세기 과학자들이 가장 많이 시간을 들인 계산은 어떤 종류였을까요?",
-      "로그의 성질 $\\log_a xy = \\log_a x + \\log_a y$는 어떤 연산을 어떤 연산으로 바꾸나요?",
-      "곱셈을 덧셈으로 바꾸면 손계산이 어떻게 달라지는지 생각해 보세요."
-    ],
+    "quiz_type": "descriptive",
+    "question": "네이피어가 로그를 고안한 배경을 서술하시오.",
+    "explanation": "천문학의 복잡한 곱셈을 덧셈으로 바꿔 계산을 단순화하려고 고안했다.",
+    "socratic_hints": ["17세기에 어떤 계산이 많았을까요?", "로그는 곱셈을 무엇으로 바꾸나요?", "손계산이 어떻게 달라질까요?"],
     "scope": "수학특화",
     "related_math_terms": ["로그"],
     "pages": [${unit.startPage}]
@@ -260,9 +223,9 @@ function getQuizPrompt(bookTitle: string, unit: TocUnitRange) {
 반드시 순수 JSON 배열만 코드 블록으로 출력하여 사용자가 ${index}-quizzes.json으로 다운로드 받도록 해줘.`;
 }
 
-function getIndexPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 용어의 색인(Index)을 아래 두 domain으로 구분하여 하나의 JSON 배열로 추출하고, ${index}-indices.json으로 다운로드 받도록 해줘.
+function getIndexPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const index = `${bookId}-${getUnitIndex(unit)}`;
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 용어의 색인(Index)을 아래 두 domain으로 구분하여 하나의 JSON 배열로 추출해 줘.
 - "수학 내적": 수학 용어, 개념, 정리(Theorem), 공식 등 수학 개념 그 자체
 - "수학 외적": 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)
 
@@ -271,7 +234,7 @@ function getIndexPrompt(bookTitle: string, unit: TocUnitRange) {
 - 본문뿐 아니라 단원 도입글, 학습 목표, 읽기 자료, 수학자 이야기, 쉬어가기/탐구 활동 박스, 교사용 지도 노트, 평가 안내 등 주변 서술까지 빠짐없이 살필 것.
 - 해당 단원 페이지에 등장하는 모든 중요 용어를 누락 없이 색인화할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
-- 추출된 결과는 사용자가 ${index}-indices.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
+- 결과 JSON 파일은 응답 전체에서 한 번만 생성할 것 (같은 파일을 여러 번 만들지 말 것).
 
 [domain 경계 규칙 — 반드시 지킬 것]
 - 수학적 정의·정리·공식·성질을 가진 용어(예: 지수함수, 피타고라스 정리, 수학적 귀납법)는 "수학 내적"으로 분류할 것.
@@ -344,9 +307,9 @@ function getMetaCategoryRules() {
 - scope: "범교과" (모든 학습에 통용) 또는 "수학특화" (수학 학습에만 해당)`;
 }
 
-function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
-  const index = getUnitIndex(unit);
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 대해 ${index}-indices.json의 색인 항목을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 하나의 JSON 배열로 작성하고, ${index}-dictionary.json으로 다운로드 받도록 해줘.
+function getDictionaryPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const index = `${bookId}-${getUnitIndex(unit)}`;
+  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 대해 ${index}-indices.json의 색인 항목을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 하나의 JSON 배열로 작성해 줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
@@ -354,7 +317,7 @@ function getDictionaryPrompt(bookTitle: string, unit: TocUnitRange) {
 - "수학 내적" 항목은 정의부터 기하학적 의미, 오개념, 예제까지 포괄적으로 작성할 것.
 - "수학 외적" 항목은 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 유래·연도·인물 정보를 외부 지식으로 지어내지 말 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
-- 작성된 결과는 사용자가 ${index}-dictionary.json 파일로 다운로드받을 수 있도록 순수 JSON 코드 블록으로 작성해 줘.
+- 결과 JSON 파일은 응답 전체에서 한 번만 생성할 것 (같은 파일을 여러 번 만들지 말 것).
 
 [필드 규격]
 공통 필드 (모든 항목):
@@ -542,6 +505,30 @@ export default function DictionaryPage() {
   const [toast, setToast] = useState<Toast>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jsonFileInputRef = useRef<HTMLInputElement | null>(null);
+  const batchFolderInputRef = useRef<HTMLInputElement | null>(null);
+  const [batchTargetUnit, setBatchTargetUnit] = useState<TocUnitRange | null>(null);
+  const [isBatchImporting, setIsBatchImporting] = useState(false);
+
+  // ── 폴더 일괄 추가 조사 결과 모달 상태 ──
+  type BatchInvestigationItem<T> = {
+    found: boolean;
+    fileName: string;
+    items: T[];
+    error?: string;
+  };
+
+  type BatchInvestigationData = {
+    targetUnit: TocUnitRange;
+    totalFilesInDir: number;
+    indices: BatchInvestigationItem<BookIndexItem>;
+    dictionary: BatchInvestigationItem<DictionaryItem>;
+    flashcards: BatchInvestigationItem<FlashcardItem>;
+    quizzes: BatchInvestigationItem<QuizItem>;
+    totalItems: number;
+  };
+
+  const [batchInvestigation, setBatchInvestigation] = useState<BatchInvestigationData | null>(null);
+  const [isSubmittingBatch, setIsSubmittingBatch] = useState(false);
   const tabContentRef = useRef<HTMLDivElement | null>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
 
@@ -1107,6 +1094,444 @@ export default function DictionaryPage() {
     }
   };
 
+  // ── 단원별 파일명 매칭 규칙 검사 ──
+  const matchUnitFile = (
+    fileName: string,
+    currentBookId: string,
+    unitIndex: number,
+    type: "indices" | "dictionary" | "flashcards" | "quizzes"
+  ): boolean => {
+    const lower = fileName.toLowerCase().trim();
+    if (!lower.endsWith(".json")) return false;
+
+    const bId = currentBookId.toLowerCase().trim();
+    const uIdx = String(unitIndex);
+
+    let typeKeywords: string[] = [];
+    if (type === "indices") typeKeywords = ["indices", "index"];
+    else if (type === "dictionary") typeKeywords = ["dictionary"];
+    else if (type === "flashcards") typeKeywords = ["flashcards", "flashcard"];
+    else if (type === "quizzes") typeKeywords = ["quizzes", "quizses", "quiz"];
+
+    for (const kw of typeKeywords) {
+      // 1순위: ${currentBookId}-${unitIndex}-${kw}.json (예: 14-1-indices.json)
+      if (bId && lower === `${bId}-${uIdx}-${kw}.json`) return true;
+      // 2순위: ${unitIndex}-${kw}.json (예: 1-indices.json)
+      if (lower === `${uIdx}-${kw}.json`) return true;
+      // 3순위: [prefix]-${unitIndex}-${kw}.json (예: book-1-indices.json)
+      if (lower.endsWith(`-${uIdx}-${kw}.json`)) return true;
+    }
+
+    return false;
+  };
+
+  // ── 폴더 내 조사된 파일 파싱 및 조사 결과 준비 ──
+  const investigateAndPrepareBatch = async (
+    targetUnit: TocUnitRange,
+    totalFilesInDir: number,
+    matchedFiles: {
+      indicesFile: File | null;
+      dictionaryFile: File | null;
+      flashcardsFile: File | null;
+      quizzesFile: File | null;
+    }
+  ) => {
+    const { indicesFile, dictionaryFile, flashcardsFile, quizzesFile } = matchedFiles;
+    const unitIndex = getUnitIndex(targetUnit);
+    const currentStem = book?.stem || "imported_book";
+    const currentTitle = book?.title || "교재";
+    const currentBookId = book?.sourceId || "";
+    const prefix = currentBookId ? `${currentBookId}-${unitIndex}-` : `${unitIndex}-`;
+
+    if (!indicesFile && !dictionaryFile && !flashcardsFile && !quizzesFile) {
+      pushToast(
+        `선택한 폴더(총 ${totalFilesInDir}개 파일)에서 이 단원의 파일(${prefix}indices.json, ${prefix}dictionary.json, ${prefix}flashcards.json, ${prefix}quizzes.json)을 찾을 수 없어 업로드 대상이 없습니다.`,
+        "error"
+      );
+      return;
+    }
+
+    const parseJsonText = (rawText: string) => {
+      let cleaned = rawText.replace(/^\uFEFF/, "").trim();
+      if (!cleaned) throw new Error("파일이 비어 있습니다.");
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (codeBlockMatch) return JSON.parse(codeBlockMatch[1].trim());
+        const arrayMatch = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (arrayMatch) return JSON.parse(arrayMatch[0]);
+        const objMatch = cleaned.match(/\{\s*"[\s\S]*"\s*:[\s\S]*\}/);
+        if (objMatch) return JSON.parse(objMatch[0]);
+        throw new Error("올바른 JSON 데이터 형식을 찾을 수 없습니다.");
+      }
+    };
+
+    const extractItems = (parsed: any, defaultKey?: string): any[] => {
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === "object" && parsed !== null) {
+        if (defaultKey && Array.isArray(parsed[defaultKey])) return parsed[defaultKey];
+        if (Array.isArray(parsed.items)) return parsed.items;
+        if (Array.isArray(parsed.data)) return parsed.data;
+        if (Array.isArray(parsed.dictionary)) return parsed.dictionary;
+        if (Array.isArray(parsed.flashcards)) return parsed.flashcards;
+        if (Array.isArray(parsed.quizzes)) return parsed.quizzes;
+        if (Array.isArray(parsed.index) || Array.isArray(parsed.bookIndex)) return parsed.index || parsed.bookIndex;
+        return [parsed];
+      }
+      return [];
+    };
+
+    const resIndices: BatchInvestigationItem<BookIndexItem> = {
+      found: false,
+      fileName: indicesFile?.name || `${prefix}indices.json`,
+      items: [],
+    };
+    const resDictionary: BatchInvestigationItem<DictionaryItem> = {
+      found: false,
+      fileName: dictionaryFile?.name || `${prefix}dictionary.json`,
+      items: [],
+    };
+    const resFlashcards: BatchInvestigationItem<FlashcardItem> = {
+      found: false,
+      fileName: flashcardsFile?.name || `${prefix}flashcards.json`,
+      items: [],
+    };
+    const resQuizzes: BatchInvestigationItem<QuizItem> = {
+      found: false,
+      fileName: quizzesFile?.name || `${prefix}quizzes.json`,
+      items: [],
+    };
+
+    // 1. 색인 파일 조사
+    if (indicesFile) {
+      try {
+        const text = await indicesFile.text();
+        const items = extractItems(parseJsonText(text), "index");
+        resIndices.items = items
+          .map((it: any) => ({
+            book_stem: currentStem,
+            book_title: currentTitle,
+            chapter_title: String(it.chapter_title || it.chapterTitle || targetUnit.title),
+            term: String(it.term || it.name || ""),
+            category: String(it.category || "개념"),
+            definition: String(it.definition || it.desc || it.description || ""),
+            formula: String(it.formula || ""),
+            pages: Array.isArray(it.pages)
+              ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+              : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : [targetUnit.startPage])),
+          }))
+          .filter((item: BookIndexItem) => item.term);
+        resIndices.found = true;
+      } catch (e: any) {
+        resIndices.found = true;
+        resIndices.error = `파싱 오류: ${e.message}`;
+      }
+    }
+
+    // 2. 딕셔너리 파일 조사
+    if (dictionaryFile) {
+      try {
+        const text = await dictionaryFile.text();
+        const items = extractItems(parseJsonText(text), "dictionary");
+        resDictionary.items = items
+          .map((it: any) => ({
+            book_stem: currentStem,
+            book_title: currentTitle,
+            chapter_title: String(it.chapter_title || it.chapterTitle || targetUnit.title),
+            term: String(it.term || it.name || ""),
+            english_term: String(it.english_term || it.englishTerm || ""),
+            definition: String(it.definition || it.desc || it.description || ""),
+            formula: String(it.formula || ""),
+            geometric_meaning: String(it.geometric_meaning || it.geometricMeaning || ""),
+            theorems: Array.isArray(it.theorems)
+              ? it.theorems.map((th: any) =>
+                  typeof th === "string"
+                    ? { name: "정리", description: th }
+                    : { name: String(th.name || ""), description: String(th.description || "") }
+                )
+              : [],
+            misconceptions: Array.isArray(it.misconceptions) ? it.misconceptions.map(String) : [],
+            examples: Array.isArray(it.examples)
+              ? it.examples.map((ex: any) =>
+                  typeof ex === "string"
+                    ? { problem: ex, solution: "" }
+                    : { problem: String(ex.problem || ""), solution: String(ex.solution || "") }
+                )
+              : [],
+            prerequisites: Array.isArray(it.prerequisites) ? it.prerequisites.map(String) : [],
+            subsequent_concepts: Array.isArray(it.subsequent_concepts || it.subsequentConcepts)
+              ? (it.subsequent_concepts || it.subsequentConcepts).map(String)
+              : [],
+            pages: Array.isArray(it.pages)
+              ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+              : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : [targetUnit.startPage])),
+          }))
+          .filter((item: DictionaryItem) => item.term && item.definition);
+        resDictionary.found = true;
+      } catch (e: any) {
+        resDictionary.found = true;
+        resDictionary.error = `파싱 오류: ${e.message}`;
+      }
+    }
+
+    // 3. 플래시카드 파일 조사
+    if (flashcardsFile) {
+      try {
+        const text = await flashcardsFile.text();
+        const items = extractItems(parseJsonText(text), "flashcards");
+        resFlashcards.items = items
+          .map((it: any) => ({
+            book_stem: currentStem,
+            book_title: currentTitle,
+            chapter_title: String(it.chapter_title || it.chapterTitle || targetUnit.title),
+            front: String(it.front || it.question || it.term || ""),
+            back: String(it.back || it.answer || it.definition || ""),
+            hint: String(it.hint || ""),
+            formula: String(it.formula || ""),
+            pages: Array.isArray(it.pages)
+              ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+              : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : [targetUnit.startPage])),
+          }))
+          .filter((item: FlashcardItem) => item.front && item.back);
+        resFlashcards.found = true;
+      } catch (e: any) {
+        resFlashcards.found = true;
+        resFlashcards.error = `파싱 오류: ${e.message}`;
+      }
+    }
+
+    // 4. 퀴즈 파일 조사
+    if (quizzesFile) {
+      try {
+        const text = await quizzesFile.text();
+        const items = extractItems(parseJsonText(text), "quizzes");
+        resQuizzes.items = items
+          .flatMap((it: any) => {
+            let options: Array<{ id: number; text: string }> = [];
+            if (Array.isArray(it.options) && it.options.length > 0) {
+              options = it.options.map((opt: any, idx: number) =>
+                typeof opt === "string"
+                  ? { id: idx + 1, text: opt }
+                  : { id: Number(opt.id || idx + 1), text: String(opt.text || "") }
+              );
+            }
+
+            let correctId = 0;
+            if (typeof it.correct_option_id !== "undefined" || typeof it.correctOptionId !== "undefined") {
+              const rawId = it.correct_option_id ?? it.correctOptionId;
+              if (typeof rawId === "number") correctId = rawId;
+              else if (typeof rawId === "string") {
+                const upper = rawId.trim().toUpperCase();
+                if (upper === "A" || upper === "1") correctId = 1;
+                else if (upper === "B" || upper === "2") correctId = 2;
+                else if (upper === "C" || upper === "3") correctId = 3;
+                else if (upper === "D" || upper === "4") correctId = 4;
+                else {
+                  const parsedNum = parseInt(rawId, 10);
+                  if (!isNaN(parsedNum)) correctId = parsedNum;
+                }
+              }
+            }
+
+            const primaryQuiz: QuizItem = {
+              book_stem: currentStem,
+              book_title: currentTitle,
+              chapter_title: String(it.chapter_title || it.chapterTitle || targetUnit.title),
+              quiz_type: it.quiz_type ? String(it.quiz_type) : options.length > 0 ? "multiple_choice" : "descriptive",
+              question: String(it.question || it["퀴즈"] || ""),
+              options,
+              correct_option_id: correctId,
+              explanation: String(it.explanation || it["답안"] || it.answer_and_explanation || ""),
+              socratic_hints: Array.isArray(it.socratic_hints || it.socraticHints)
+                ? (it.socratic_hints || it.socraticHints).map(String)
+                : [],
+              pages: Array.isArray(it.pages)
+                ? it.pages.map(Number).filter((n: number) => !isNaN(n))
+                : (it.pages ? [Number(it.pages)].filter((n: number) => !isNaN(n)) : (it.page ? [Number(it.page)].filter((n: number) => !isNaN(n)) : [targetUnit.startPage])),
+            };
+
+            const list: QuizItem[] = [];
+            if (primaryQuiz.question) list.push(primaryQuiz);
+
+            if (it.descriptive_quiz && typeof it.descriptive_quiz === "object") {
+              const dq = it.descriptive_quiz;
+              const descQ = String(dq.question || "");
+              if (descQ && descQ !== primaryQuiz.question) {
+                list.push({
+                  book_stem: currentStem,
+                  book_title: currentTitle,
+                  chapter_title: primaryQuiz.chapter_title,
+                  quiz_type: "descriptive",
+                  question: descQ,
+                  options: [],
+                  correct_option_id: 0,
+                  explanation: String(dq.model_answer || dq.explanation || ""),
+                  socratic_hints: Array.isArray(dq.socratic_hints)
+                    ? dq.socratic_hints.map(String)
+                    : primaryQuiz.socratic_hints,
+                  pages: primaryQuiz.pages,
+                });
+              }
+            }
+            return list;
+          })
+          .filter((item: QuizItem) => item.question);
+        resQuizzes.found = true;
+      } catch (e: any) {
+        resQuizzes.found = true;
+        resQuizzes.error = `파싱 오류: ${e.message}`;
+      }
+    }
+
+    const totalItems =
+      resIndices.items.length + resDictionary.items.length + resFlashcards.items.length + resQuizzes.items.length;
+
+    if (totalItems === 0) {
+      pushToast(
+        `[${targetUnit.title}] 해당 단원 파일들은 발견되었으나 유효한 데이터가 없습니다. (업로드 안 됨)`,
+        "error"
+      );
+      return;
+    }
+
+    // 조사 결과 모달을 띄워 사용자에게 해당 파일만 업로드됨을 명확히 제시
+    setBatchInvestigation({
+      targetUnit,
+      totalFilesInDir,
+      indices: resIndices,
+      dictionary: resDictionary,
+      flashcards: resFlashcards,
+      quizzes: resQuizzes,
+      totalItems,
+    });
+  };
+
+  // ── 단원별 폴더 선택 핸들러 (showDirectoryPicker 우선 사용으로 폴더 전체 업로드 방지) ──
+  const handleBatchFolderClick = async (unit: TocUnitRange) => {
+    setBatchTargetUnit(unit);
+
+    // 1) File System Access API (Chrome, Edge): 폴더 전체를 브라우저에 스테이징/업로드하지 않고 디렉토리 핸들만 접근하여 해당 파일만 조사
+    if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
+      try {
+        const dirHandle = await (window as any).showDirectoryPicker({ mode: "read" });
+        setIsBatchImporting(true);
+        const currentBookId = book?.sourceId || "";
+        const unitIndex = getUnitIndex(unit);
+
+        let indicesFile: File | null = null;
+        let dictionaryFile: File | null = null;
+        let flashcardsFile: File | null = null;
+        let quizzesFile: File | null = null;
+        let totalFilesInDir = 0;
+
+        for await (const entry of (dirHandle as any).values()) {
+          if (entry.kind === "file") {
+            totalFilesInDir++;
+            const name = entry.name;
+            if (!indicesFile && matchUnitFile(name, currentBookId, unitIndex, "indices")) {
+              indicesFile = await entry.getFile();
+            } else if (!dictionaryFile && matchUnitFile(name, currentBookId, unitIndex, "dictionary")) {
+              dictionaryFile = await entry.getFile();
+            } else if (!flashcardsFile && matchUnitFile(name, currentBookId, unitIndex, "flashcards")) {
+              flashcardsFile = await entry.getFile();
+            } else if (!quizzesFile && matchUnitFile(name, currentBookId, unitIndex, "quizzes")) {
+              quizzesFile = await entry.getFile();
+            }
+          }
+        }
+
+        await investigateAndPrepareBatch(unit, totalFilesInDir, {
+          indicesFile,
+          dictionaryFile,
+          flashcardsFile,
+          quizzesFile,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === "AbortError") {
+          setBatchTargetUnit(null);
+          return;
+        }
+        console.warn("showDirectoryPicker 실패, input fallback 사용:", err);
+      } finally {
+        setIsBatchImporting(false);
+      }
+    }
+
+    // 2) showDirectoryPicker 미지원 환경일 때 input fallback
+    if (batchFolderInputRef.current) {
+      batchFolderInputRef.current.value = "";
+      batchFolderInputRef.current.click();
+    }
+  };
+
+  const handleBatchFolderImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    const targetUnit = batchTargetUnit;
+    if (!fileList || fileList.length === 0 || !targetUnit) return;
+    e.target.value = "";
+
+    setIsBatchImporting(true);
+    try {
+      const files = Array.from(fileList);
+      const currentBookId = book?.sourceId || "";
+      const unitIndex = getUnitIndex(targetUnit);
+
+      // 전체 파일 중 해당 단원의 파일만 조사 및 선별
+      const indicesFile = files.find(f => matchUnitFile(f.name, currentBookId, unitIndex, "indices")) || null;
+      const dictionaryFile = files.find(f => matchUnitFile(f.name, currentBookId, unitIndex, "dictionary")) || null;
+      const flashcardsFile = files.find(f => matchUnitFile(f.name, currentBookId, unitIndex, "flashcards")) || null;
+      const quizzesFile = files.find(f => matchUnitFile(f.name, currentBookId, unitIndex, "quizzes")) || null;
+
+      await investigateAndPrepareBatch(targetUnit, files.length, {
+        indicesFile,
+        dictionaryFile,
+        flashcardsFile,
+        quizzesFile,
+      });
+    } catch (err: any) {
+      pushToast(`파일 조사 오류: ${err.message}`, "error");
+    } finally {
+      setIsBatchImporting(false);
+    }
+  };
+
+  // ── 조사된 단원 4대 파일 최종 DB 업로드 ──
+  const handleConfirmBatchUpload = async () => {
+    if (!batchInvestigation) return;
+    setIsSubmittingBatch(true);
+    const { targetUnit, indices, dictionary, flashcards, quizzes, totalItems } = batchInvestigation;
+    const currentStem = book?.stem || "imported_book";
+
+    try {
+      const res = await fetch("/api/dictionary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dictionary: dictionary.items,
+          flashcards: flashcards.items,
+          quizzes: quizzes.items,
+          bookIndex: indices.items,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "DB 저장 실패");
+
+      pushToast(
+        `[${targetUnit.title}] 해당 파일만 업로드 완료: 색인 ${indices.items.length}개, 사전 ${dictionary.items.length}개, 카드 ${flashcards.items.length}개, 퀴즈 ${quizzes.items.length}개 (총 ${totalItems}개 저장)`,
+        "success"
+      );
+      setBatchInvestigation(null);
+      await loadData(currentStem);
+    } catch (err: unknown) {
+      const error = err as Error;
+      pushToast(`DB 저장 오류: ${error.message}`, "error");
+    } finally {
+      setIsSubmittingBatch(false);
+    }
+  };
+
   // ── 챕터 필터링 데이터 ──
   const chapterOptions = useMemo(() => {
     const set = new Set<string>();
@@ -1161,6 +1586,7 @@ export default function DictionaryPage() {
   }, [tocUnits, promptTargetUnitId]);
 
   const currentBookTitle = book?.title || "고등수학";
+  const currentBookId = book?.sourceId || "";
 
   return (
     <>
@@ -1184,6 +1610,14 @@ export default function DictionaryPage() {
             onChange={handleJsonFileImport}
             accept=".json,application/json"
             className="hidden"
+          />
+          {/* 단원별 폴더 일괄 추가 숨김 input */}
+          <input
+            type="file"
+            ref={batchFolderInputRef}
+            onChange={handleBatchFolderImport}
+            className="hidden"
+            {...({ webkitdirectory: "", directory: "", multiple: true } as any)}
           />
           {/* PDF → Mathpix 버튼: PDF → Mathpix → 제출 → MD 전환 완료 → 저장 완료 */}
           <button
@@ -1389,14 +1823,30 @@ export default function DictionaryPage() {
                       데이터 필터
                     </button>
 
-                    <button
-                      onClick={() => openPromptModalForUnit(unit.id)}
-                      className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 font-bold transition-all flex items-center gap-1 cursor-pointer"
-                      title="이 단원의 프롬프트 개별 복사 창 열기"
-                    >
-                      <Copy className="w-3 h-3 text-amber-300" />
-                      <span>프롬프트 복사</span>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openPromptModalForUnit(unit.id)}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 font-bold transition-all flex items-center gap-1 cursor-pointer"
+                        title="이 단원의 프롬프트 개별 복사 창 열기"
+                      >
+                        <Copy className="w-3 h-3 text-amber-300" />
+                        <span>프롬프트 복사</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleBatchFolderClick(unit)}
+                        disabled={isBatchImporting}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={`이 단원의 파일(${currentBookId ? `${currentBookId}-` : ""}${getUnitIndex(unit)}-*.json)이 포함된 폴더를 선택하여 색인/사전/카드/퀴즈 일괄 추가`}
+                      >
+                        {isBatchImporting && batchTargetUnit?.id === unit.id ? (
+                          <RotateCw className="w-3 h-3 animate-spin text-emerald-300" />
+                        ) : (
+                          <FolderUp className="w-3 h-3 text-emerald-300" />
+                        )}
+                        <span>일괄 추가</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -2038,11 +2488,10 @@ export default function DictionaryPage() {
                     <button
                       type="button"
                       onClick={() => setIndexViewMode("card")}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        indexViewMode === "card"
-                          ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
-                          : "text-gray-400 hover:text-white"
-                      }`}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${indexViewMode === "card"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                        : "text-gray-400 hover:text-white"
+                        }`}
                     >
                       <LayoutGrid className="w-3.5 h-3.5" />
                       <span>카드 뷰</span>
@@ -2050,11 +2499,10 @@ export default function DictionaryPage() {
                     <button
                       type="button"
                       onClick={() => setIndexViewMode("table")}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        indexViewMode === "table"
-                          ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
-                          : "text-gray-400 hover:text-white"
-                      }`}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${indexViewMode === "table"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                        : "text-gray-400 hover:text-white"
+                        }`}
                     >
                       <List className="w-3.5 h-3.5" />
                       <span>테이블 뷰</span>
@@ -2287,7 +2735,7 @@ export default function DictionaryPage() {
               {/* 1. 플래시카드 프롬프트 */}
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "flashcards") return null;
-                const promptText = getFlashcardPrompt(currentBookTitle, activePromptUnit);
+                const promptText = getFlashcardPrompt(currentBookTitle, currentBookId, activePromptUnit);
                 const isCopied = copiedPromptKey === "flashcards";
                 const unitIndex = getUnitIndex(activePromptUnit);
 
@@ -2320,7 +2768,7 @@ export default function DictionaryPage() {
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
                       <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-purple-300/80 font-mono">
-                        다운로드 파일: {unitIndex}-flashcards.json
+                        다운로드 파일: {currentBookId}-{unitIndex}-flashcards.json
                       </span>
                     </div>
 
@@ -2336,7 +2784,7 @@ export default function DictionaryPage() {
               {/* 2. 퀴즈 & 소크라테스 힌트 프롬프트 */}
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "quizzes") return null;
-                const promptText = getQuizPrompt(currentBookTitle, activePromptUnit);
+                const promptText = getQuizPrompt(currentBookTitle, currentBookId, activePromptUnit);
                 const isCopied = copiedPromptKey === "quizzes";
                 const unitIndex = getUnitIndex(activePromptUnit);
 
@@ -2369,7 +2817,7 @@ export default function DictionaryPage() {
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
                       <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-teal-300/80 font-mono">
-                        다운로드 파일: {unitIndex}-quizzes.json
+                        다운로드 파일: {currentBookId}-{unitIndex}-quizzes.json
                       </span>
                     </div>
 
@@ -2385,7 +2833,7 @@ export default function DictionaryPage() {
               {/* 3. 개념 색인(Index) 프롬프트 */}
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "index") return null;
-                const promptText = getIndexPrompt(currentBookTitle, activePromptUnit);
+                const promptText = getIndexPrompt(currentBookTitle, currentBookId, activePromptUnit);
                 const isCopied = copiedPromptKey === "index";
                 const unitIndex = getUnitIndex(activePromptUnit);
 
@@ -2418,7 +2866,7 @@ export default function DictionaryPage() {
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
                       <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-blue-300/80 font-mono">
-                        다운로드 파일: {unitIndex}-indices.json
+                        다운로드 파일: {currentBookId}-{unitIndex}-indices.json
                       </span>
                     </div>
 
@@ -2434,7 +2882,7 @@ export default function DictionaryPage() {
               {/* 4. 심층 딕셔너리 구축 프롬프트 */}
               {(() => {
                 if (promptOnlyTask && promptOnlyTask !== "dictionary") return null;
-                const promptText = getDictionaryPrompt(currentBookTitle, activePromptUnit);
+                const promptText = getDictionaryPrompt(currentBookTitle, currentBookId, activePromptUnit);
                 const isCopied = copiedPromptKey === "dictionary";
                 const unitIndex = getUnitIndex(activePromptUnit);
 
@@ -2467,7 +2915,7 @@ export default function DictionaryPage() {
                     <div className="flex items-center justify-between text-[11px] bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/5">
                       <span className="text-gray-400 font-semibold text-[10px]">domain: 수학 내적 + 수학 외적</span>
                       <span className="text-[10px] text-orange-300/80 font-mono">
-                        다운로드 파일: {unitIndex}-dictionary.json
+                        다운로드 파일: {currentBookId}-{unitIndex}-dictionary.json
                       </span>
                     </div>
 
@@ -2589,10 +3037,10 @@ export default function DictionaryPage() {
                   {deleteTarget.type === "dictionary"
                     ? "수학 딕셔너리"
                     : deleteTarget.type === "flashcards"
-                    ? "플래시카드"
-                    : deleteTarget.type === "quizzes"
-                    ? "퀴즈 은행"
-                    : "개념 색인"}
+                      ? "플래시카드"
+                      : deleteTarget.type === "quizzes"
+                        ? "퀴즈 은행"
+                        : "개념 색인"}
                 </span>
               </div>
               <div className="text-xs font-semibold text-orange-300 break-words line-clamp-3">
@@ -2626,6 +3074,174 @@ export default function DictionaryPage() {
                   <Trash2 className="w-3.5 h-3.5" />
                 )}
                 <span>예</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 8. 단원 파일 조사 결과 및 일괄 추가 확인 모달 ── */}
+      {batchInvestigation && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          onMouseDown={e => {
+            if (e.target === e.currentTarget && !isSubmittingBatch) setBatchInvestigation(null);
+          }}
+        >
+          <div className="glass w-[640px] max-w-full max-h-[90vh] rounded-2xl p-6 border border-emerald-500/30 shadow-2xl flex flex-col gap-4 overflow-hidden">
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <FolderUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                    <span>단원 파일 선별 조사 결과</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      {batchInvestigation.targetUnit.title}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    폴더 내 전체 <strong className="text-gray-200">{batchInvestigation.totalFilesInDir}개</strong> 파일 중, 이 단원에 해당하는 파일만 선별 조사하였습니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 조사된 4대 파일 목록 */}
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+              {[
+                {
+                  key: "index",
+                  label: "개념 색인",
+                  icon: Hash,
+                  color: "text-blue-400",
+                  bg: "bg-blue-500/10 border-blue-500/20",
+                  data: batchInvestigation.indices,
+                  unitLabel: "항목",
+                },
+                {
+                  key: "dictionary",
+                  label: "수학 딕셔너리",
+                  icon: BookOpen,
+                  color: "text-orange-400",
+                  bg: "bg-orange-500/10 border-orange-500/20",
+                  data: batchInvestigation.dictionary,
+                  unitLabel: "항목",
+                },
+                {
+                  key: "flashcards",
+                  label: "플래시카드",
+                  icon: Layers,
+                  color: "text-purple-400",
+                  bg: "bg-purple-500/10 border-purple-500/20",
+                  data: batchInvestigation.flashcards,
+                  unitLabel: "카드",
+                },
+                {
+                  key: "quizzes",
+                  label: "퀴즈 은행",
+                  icon: HelpCircle,
+                  color: "text-emerald-400",
+                  bg: "bg-emerald-500/10 border-emerald-500/20",
+                  data: batchInvestigation.quizzes,
+                  unitLabel: "문항",
+                },
+              ].map(item => {
+                const Icon = item.icon;
+                const { found, fileName, items, error } = item.data;
+                return (
+                  <div
+                    key={item.key}
+                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${
+                      found ? "bg-black/40 border-white/10" : "bg-black/20 border-white/5 opacity-55"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`p-2 rounded-lg border ${item.bg} ${item.color}`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-200">{item.label}</span>
+                          {found ? (
+                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded truncate max-w-[200px]" title={fileName}>
+                              {fileName}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-500 font-mono">미발견 (제외됨)</span>
+                          )}
+                        </div>
+                        {error ? (
+                          <span className="text-[10px] text-red-400 block mt-0.5 truncate">{error}</span>
+                        ) : found ? (
+                          <span className="text-[10px] text-gray-400 block mt-0.5 font-mono">
+                            조사 완료: <strong className="text-emerald-300">{items.length}개</strong> {item.unitLabel} 추출됨
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-500 block mt-0.5">
+                            해당 파일이 폴더에 없어 업로드 대상에서 자동 제외됩니다.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
+                      {found ? (
+                        <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center gap-1 font-mono">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{items.length}개</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-500 text-xs font-medium">
+                          제외됨
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 필터링 안내 박스 */}
+            <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-emerald-200/90">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-emerald-300 block mb-0.5">선별된 해당 파일만 안전하게 업로드됩니다</strong>
+                폴더 내 다른 파일({Math.max(
+                  0,
+                  batchInvestigation.totalFilesInDir -
+                    ((batchInvestigation.indices.found ? 1 : 0) +
+                      (batchInvestigation.dictionary.found ? 1 : 0) +
+                      (batchInvestigation.flashcards.found ? 1 : 0) +
+                      (batchInvestigation.quizzes.found ? 1 : 0))
+                )}개)은 업로드 대상에서 자동 제외되었으며, 위 조사된 <strong className="text-white">{batchInvestigation.totalItems}개 항목만</strong> DB에 저장됩니다.
+              </div>
+            </div>
+
+            {/* 모달 하단 버튼 액션 */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setBatchInvestigation(null)}
+                disabled={isSubmittingBatch}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-gray-300 transition-all cursor-pointer disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBatchUpload}
+                disabled={isSubmittingBatch || batchInvestigation.totalItems === 0}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmittingBatch ? (
+                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FolderUp className="w-3.5 h-3.5" />
+                )}
+                <span>해당 파일만 업로드 ({batchInvestigation.totalItems}개 항목)</span>
               </button>
             </div>
           </div>
