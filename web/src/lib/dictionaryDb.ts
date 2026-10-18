@@ -231,3 +231,68 @@ export async function saveBookIndex(items: BookIndexItem[]): Promise<number> {
     client.release();
   }
 }
+
+export async function deleteDictionaryItem(id?: number, bookStem?: string, term?: string): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    if (id) {
+      const res = await client.query(`DELETE FROM kg.dictionary WHERE id = $1`, [id]);
+      return (res.rowCount ?? 0) > 0;
+    } else if (bookStem && term) {
+      const res = await client.query(`DELETE FROM kg.dictionary WHERE book_stem = $1 AND term = $2`, [bookStem, term]);
+      return (res.rowCount ?? 0) > 0;
+    }
+    return false;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteFlashcard(id?: number, bookStem?: string, front?: string): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    if (id) {
+      const res = await client.query(`DELETE FROM kg.flashcards WHERE id = $1`, [id]);
+      return (res.rowCount ?? 0) > 0;
+    } else if (bookStem && front) {
+      const res = await client.query(`DELETE FROM kg.flashcards WHERE book_stem = $1 AND front = $2`, [bookStem, front]);
+      return (res.rowCount ?? 0) > 0;
+    }
+    return false;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteQuiz(id?: number, bookStem?: string, question?: string): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    if (id) {
+      const res = await client.query(`DELETE FROM kg.quizzes WHERE id = $1`, [id]);
+      return (res.rowCount ?? 0) > 0;
+    } else if (bookStem && question) {
+      const res = await client.query(`DELETE FROM kg.quizzes WHERE book_stem = $1 AND question = $2`, [bookStem, question]);
+      return (res.rowCount ?? 0) > 0;
+    }
+    return false;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteBookIndex(id?: number, bookStem?: string, term?: string): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    if (id) {
+      const res = await client.query(`DELETE FROM kg.book_index WHERE id = $1`, [id]);
+      return (res.rowCount ?? 0) > 0;
+    } else if (bookStem && term) {
+      const res = await client.query(`DELETE FROM kg.book_index WHERE book_stem = $1 AND term = $2`, [bookStem, term]);
+      return (res.rowCount ?? 0) > 0;
+    }
+    return false;
+  } finally {
+    client.release();
+  }
+}
+

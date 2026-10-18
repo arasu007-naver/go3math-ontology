@@ -31,6 +31,20 @@ body {
   font-family: monospace;
 }
 
+mjx-container {
+  display: inline-grid;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+mjx-container[display="true"] {
+  display: block;
+  margin: 0.5rem 0;
+  text-align: center;
+}
+
 .db-item-body {
   overflow-x: auto;
   color: #e5e7eb;

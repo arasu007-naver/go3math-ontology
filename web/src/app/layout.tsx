@@ -20,9 +20,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <Script id="mathjax-config" strategy="beforeInteractive">
           {`window.MathJax = {
-            tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']] },
+            tex: {
+              inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+              displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+              processEscapes: true
+            },
             asciimath: { delimiters: [['\`', '\`']] },
-            loader: { load: ['input/asciimath', 'output/chtml'] }
+            options: {
+              skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            },
+            loader: { load: ['input/tex', 'input/asciimath', 'output/chtml'] }
           };`}
         </Script>
         <Script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/startup.js" strategy="afterInteractive" />

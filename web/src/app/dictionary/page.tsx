@@ -22,10 +22,15 @@ import {
   CheckCircle2,
   FileCode,
   Eye,
-  EyeOff
+  EyeOff,
+  Trash2,
+  LayoutGrid,
+  List
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import BookBars from "@/components/BookBars";
+import MathView from "@/components/MathView";
+import { typeset } from "@/lib/format";
 import { fetchToc } from "@/lib/ocrApi";
 import { commentaryList, extractTocUnitsWithPageRanges, stripExt } from "@/lib/toc";
 import type {
@@ -580,11 +585,80 @@ export default function DictionaryPage() {
   const [pasteTargetUnitTitle, setPasteTargetUnitTitle] = useState<string>("");
   const [pastedJsonText, setPastedJsonText] = useState("");
 
+  // ── 항목 개별 삭제 모달 상태 ──
+  type DeleteTarget = {
+    type: "dictionary" | "flashcards" | "quizzes" | "index";
+    title: string;
+    item: DictionaryItem | FlashcardItem | QuizItem | BookIndexItem;
+  };
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [indexViewMode, setIndexViewMode] = useState<"card" | "table">("card");
+
+  const openDeleteModal = (
+    type: "dictionary" | "flashcards" | "quizzes" | "index",
+    item: DictionaryItem | FlashcardItem | QuizItem | BookIndexItem
+  ) => {
+    let title = "";
+    if (type === "dictionary") title = (item as DictionaryItem).term || "딕셔너리 항목";
+    else if (type === "flashcards") title = (item as FlashcardItem).front || "플래시카드";
+    else if (type === "quizzes") title = (item as QuizItem).question || "퀴즈";
+    else if (type === "index") title = (item as BookIndexItem).term || "색인 항목";
+
+    setDeleteTarget({ type, title, item });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const { type, item } = deleteTarget;
+      const res = await fetch("/api/dictionary", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          id: item.id,
+          bookStem: item.book_stem || book?.stem,
+          term: (item as DictionaryItem | BookIndexItem).term,
+          front: (item as FlashcardItem).front,
+          question: (item as QuizItem).question,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "삭제에 실패했습니다.");
+
+      if (type === "dictionary") {
+        setDictionaryList(prev => prev.filter(it => (item.id ? it.id !== item.id : it.term !== (item as DictionaryItem).term)));
+      } else if (type === "flashcards") {
+        setFlashcardList(prev => prev.filter(it => (item.id ? it.id !== item.id : it.front !== (item as FlashcardItem).front)));
+      } else if (type === "quizzes") {
+        setQuizList(prev => prev.filter(it => (item.id ? it.id !== item.id : it.question !== (item as QuizItem).question)));
+      } else if (type === "index") {
+        setIndexList(prev => prev.filter(it => (item.id ? it.id !== item.id : it.term !== (item as BookIndexItem).term)));
+      }
+
+      pushToast(`'${deleteTarget.title}' 항목이 삭제되었습니다.`, "success");
+      setDeleteTarget(null);
+    } catch (err) {
+      pushToast(`삭제 실패: ${(err as Error).message}`, "error");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // ── 토스트 ──
   const [toast, setToast] = useState<Toast>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jsonFileInputRef = useRef<HTMLInputElement | null>(null);
+  const tabContentRef = useRef<HTMLDivElement | null>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
+
+  useEffect(() => {
+    if (tabContentRef.current) {
+      typeset(tabContentRef.current);
+    }
+  }, [activeTab, book?.stem]);
 
   const pushToast = useCallback((msg: string, type: "success" | "error" | "info" = "success") => {
     setToast({ msg, type });
@@ -1552,7 +1626,7 @@ export default function DictionaryPage() {
         </div>
 
         {/* 탭 콘텐츠 영역 */}
-        <div className="flex-1 min-h-0 glass rounded-2xl p-4 overflow-y-auto border border-white/5">
+        <div ref={tabContentRef} className="flex-1 min-h-0 glass rounded-2xl p-4 overflow-y-auto border border-white/5">
           {isLoading ? (
             <div className="h-full flex flex-col items-center justify-center gap-2 text-gray-500">
               <RotateCw className="w-6 h-6 animate-spin text-orange-400" />
@@ -1594,7 +1668,7 @@ export default function DictionaryPage() {
                     <div className="flex items-start justify-between gap-2 border-b border-white/5 pb-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-extrabold text-orange-300">{item.term}</h3>
+                          <MathView as="h3" text={item.term} className="text-sm font-extrabold text-orange-300" />
                           {item.english_term && (
                             <span className="text-[10px] text-gray-500 font-mono italic">({item.english_term})</span>
                           )}
@@ -1615,18 +1689,19 @@ export default function DictionaryPage() {
                     {/* 정의 */}
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">정의 및 공식</span>
-                      <p className="text-xs text-gray-200 font-medium leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5 font-mono">
-                        {item.definition}
-                      </p>
+                      <MathView as="p" text={item.definition} className="text-xs text-gray-200 font-medium leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5 font-mono" />
+                      {item.formula && (
+                        <div className="text-[11px] font-mono text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg">
+                          <MathView text={item.formula} isFormula />
+                        </div>
+                      )}
                     </div>
 
                     {/* 기하학적 의미 */}
                     {item.geometric_meaning && (
                       <div className="space-y-1">
                         <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">기하학적/직관적 의미</span>
-                        <p className="text-xs text-gray-300 bg-blue-500/5 border border-blue-500/10 p-2 rounded-lg">
-                          {item.geometric_meaning}
-                        </p>
+                        <MathView as="p" text={item.geometric_meaning} className="text-xs text-gray-300 bg-blue-500/5 border border-blue-500/10 p-2 rounded-lg" />
                       </div>
                     )}
 
@@ -1639,8 +1714,10 @@ export default function DictionaryPage() {
                         <div className="space-y-1">
                           {item.theorems.map((th, thIdx) => (
                             <div key={thIdx} className="text-xs bg-purple-500/5 border border-purple-500/10 p-2 rounded-lg">
-                              <strong className="text-purple-300 font-semibold">{th.name}: </strong>
-                              <span className="text-gray-300">{th.description}</span>
+                              <strong className="text-purple-300 font-semibold">
+                                <MathView text={th.name} inline />:{" "}
+                              </strong>
+                              <MathView text={th.description} inline className="text-gray-300 inline" />
                             </div>
                           ))}
                         </div>
@@ -1655,7 +1732,9 @@ export default function DictionaryPage() {
                         </span>
                         <ul className="text-xs text-amber-200/90 list-disc list-inside bg-amber-500/5 border border-amber-500/10 p-2 rounded-lg space-y-0.5">
                           {item.misconceptions.map((m, mIdx) => (
-                            <li key={mIdx}>{m}</li>
+                            <li key={mIdx}>
+                              <MathView text={m} inline />
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -1671,6 +1750,26 @@ export default function DictionaryPage() {
                         <span className="text-gray-500">후속: </span>
                         <span className="text-gray-300 font-semibold">{item.subsequent_concepts?.join(", ") || "-"}</span>
                       </div>
+                    </div>
+
+                    {/* 하단 버튼그룹 영역 */}
+                    <div className="flex items-center justify-between pt-2.5 border-t border-white/5 mt-auto">
+                      <div className="flex items-center gap-2">
+                        {item.created_at && (
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            {new Date(item.created_at).toLocaleDateString("ko-KR")}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteModal("dictionary", item)}
+                        className="px-2.5 py-1 rounded-lg border border-red-500/20 bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm ml-auto"
+                        title="이 딕셔너리 항목 삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>삭제</span>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1739,22 +1838,25 @@ export default function DictionaryPage() {
                       </div>
 
                       <div className="py-4 flex-1 flex items-center justify-center text-center">
-                        {isFlipped ? (
-                          <div className="space-y-2">
-                            <p className="text-xs font-semibold text-purple-100 leading-relaxed whitespace-pre-wrap">
-                              {card.back}
-                            </p>
-                            {card.formula && (
-                              <div className="text-[11px] font-mono text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg">
-                                {card.formula}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm font-bold text-gray-100 leading-snug">
-                            {card.front}
-                          </p>
-                        )}
+                        <div className={`space-y-2 w-full ${isFlipped ? "block" : "hidden"}`}>
+                          <MathView
+                            as="p"
+                            text={card.back}
+                            className="text-xs font-semibold text-purple-100 leading-relaxed whitespace-pre-wrap"
+                          />
+                          {card.formula && (
+                            <div className="text-[11px] font-mono text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg">
+                              <MathView text={card.formula} isFormula />
+                            </div>
+                          )}
+                        </div>
+                        <div className={`w-full ${isFlipped ? "hidden" : "block"}`}>
+                          <MathView
+                            as="p"
+                            text={card.front}
+                            className="text-sm font-bold text-gray-100 leading-snug"
+                          />
+                        </div>
                       </div>
 
                       {/* 힌트 & 플립 안내 */}
@@ -1768,13 +1870,32 @@ export default function DictionaryPage() {
                             }}
                             className="text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer font-semibold"
                           >
-                            <Lightbulb className="w-3 h-3" />
-                            <span>{isHintOpen ? card.hint : "힌트 보기"}</span>
+                            <Lightbulb className="w-3 h-3 shrink-0" />
+                            <span>{isHintOpen ? <MathView text={card.hint} inline /> : "힌트 보기"}</span>
                           </button>
                         ) : <span />}
                         <span className="text-gray-500 flex items-center gap-1 text-[9px]">
                           <RotateCw className="w-3 h-3" /> 클릭하여 뒤집기
                         </span>
+                      </div>
+
+                      {/* 하단 버튼그룹 영역 */}
+                      <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-1">
+                        <div className="flex items-center gap-1 text-[9px] text-gray-500 font-mono">
+                          {card.created_at ? new Date(card.created_at).toLocaleDateString("ko-KR") : ""}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteModal("flashcards", card);
+                          }}
+                          className="px-2.5 py-1 rounded-lg border border-red-500/20 bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm ml-auto"
+                          title="이 플래시카드 삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>삭제</span>
+                        </button>
                       </div>
                     </div>
                   );
@@ -1847,9 +1968,11 @@ export default function DictionaryPage() {
                       </div>
 
                       {/* 문제 내용 */}
-                      <p className="text-xs font-bold text-gray-100 leading-relaxed whitespace-pre-wrap">
-                        {quiz.question}
-                      </p>
+                      <MathView
+                        as="p"
+                        text={quiz.question}
+                        className="text-xs font-bold text-gray-100 leading-relaxed whitespace-pre-wrap"
+                      />
 
                       {/* 4개 보기 버튼 (옵션이 있는 경우에만 표시) */}
                       {hasOptions && (
@@ -1878,7 +2001,9 @@ export default function DictionaryPage() {
                                 <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center font-mono font-bold text-[10px] shrink-0">
                                   {opt.id}
                                 </span>
-                                <span className="leading-snug">{opt.text}</span>
+                                <span className="leading-snug">
+                                  <MathView text={opt.text} inline />
+                                </span>
                               </button>
                             );
                           })}
@@ -1926,7 +2051,9 @@ export default function DictionaryPage() {
                               {quiz.socratic_hints.slice(0, hintLevel).map((hint, hIdx) => (
                                 <div key={hIdx} className="text-xs text-amber-200/90 flex items-start gap-2 bg-amber-500/10 p-2 rounded-lg">
                                   <span className="font-mono font-bold text-[10px] text-amber-400 shrink-0">L{hIdx + 1}</span>
-                                  <span>{hint}</span>
+                                  <span className="leading-relaxed">
+                                    <MathView text={hint} inline />
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -1952,11 +2079,33 @@ export default function DictionaryPage() {
                                 : "모범 답안 및 해설"}
                             </span>
                           </div>
-                          <p className="text-gray-300 text-[11px] leading-relaxed pt-1 whitespace-pre-wrap">
-                            {quiz.explanation}
-                          </p>
+                          <MathView
+                            as="p"
+                            text={quiz.explanation}
+                            className="text-gray-300 text-[11px] leading-relaxed pt-1 whitespace-pre-wrap"
+                          />
                         </div>
                       )}
+
+                      {/* 하단 버튼그룹 영역 */}
+                      <div className="flex items-center justify-between pt-2.5 border-t border-white/5">
+                        <div className="flex items-center gap-2">
+                          {quiz.created_at && (
+                            <span className="text-[10px] text-gray-500 font-mono">
+                              {new Date(quiz.created_at).toLocaleDateString("ko-KR")}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openDeleteModal("quizzes", quiz)}
+                          className="px-2.5 py-1 rounded-lg border border-red-500/20 bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm ml-auto"
+                          title="이 퀴즈 삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>삭제</span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1989,45 +2138,172 @@ export default function DictionaryPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-white/5 border-b border-white/10 text-gray-400 font-semibold text-[11px]">
-                    <tr>
-                      <th className="py-2.5 px-3 w-12 text-center">#</th>
-                      <th className="py-2.5 px-3 w-36">용어명</th>
-                      <th className="py-2.5 px-3 w-28">소속 단원</th>
-                      <th className="py-2.5 px-3 w-20">분류</th>
-                      <th className="py-2.5 px-3">정의</th>
-                      <th className="py-2.5 px-3 w-32">대표 수식</th>
-                      <th className="py-2.5 px-3 w-24 text-center">등장 페이지</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
+              <div className="space-y-4">
+                {/* 뷰 전환 헤더 바 */}
+                <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                  <div className="text-xs text-gray-400">
+                    총 <span className="text-orange-400 font-bold">{filteredIndex.length}</span>개의 색인 항목
+                  </div>
+                  <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setIndexViewMode("card")}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        indexViewMode === "card"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span>카드 뷰</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIndexViewMode("table")}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        indexViewMode === "table"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      <span>테이블 뷰</span>
+                    </button>
+                  </div>
+                </div>
+
+                {indexViewMode === "card" ? (
+                  /* ── 개념 색인 카드 뷰 ── */
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredIndex.map((idxItem, idx) => (
-                      <tr key={idx} className="hover:bg-white/5 transition-colors">
-                        <td className="py-2 px-3 text-center text-gray-500 font-mono text-[10px]">{idx + 1}</td>
-                        <td className="py-2 px-3 font-bold text-orange-300">{idxItem.term}</td>
-                        <td className="py-2 px-3 text-gray-400 text-[10px] truncate max-w-[140px]">{idxItem.chapter_title || "-"}</td>
-                        <td className="py-2 px-3">
-                          <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[10px]">
-                            {idxItem.category || "개념"}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-gray-300 text-[11px]">{idxItem.definition}</td>
-                        <td className="py-2 px-3 font-mono text-[10px] text-purple-300">{idxItem.formula || "-"}</td>
-                        <td className="py-2 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {idxItem.pages?.map(p => (
-                              <span key={p} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 font-mono text-[9px]">
-                                p.{p}
+                      <div
+                        key={idxItem.id || `${idxItem.term}-${idx}`}
+                        className="bg-black/30 border border-white/10 hover:border-blue-500/30 rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-lg hover:shadow-blue-500/5 group"
+                      >
+                        <div className="space-y-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-mono text-gray-500">#{idx + 1}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[10px]">
+                                {idxItem.category || "개념"}
                               </span>
-                            ))}
+                              {idxItem.chapter_title && (
+                                <span className="text-[10px] text-gray-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/5 truncate max-w-[140px]" title={idxItem.chapter_title}>
+                                  {idxItem.chapter_title}
+                                </span>
+                              )}
+                            </div>
+                            {idxItem.pages && idxItem.pages.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap shrink-0">
+                                {idxItem.pages.map(p => (
+                                  <span key={p} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-400 font-mono text-[9px]">
+                                    p.{p}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        </td>
-                      </tr>
+
+                          <div className="text-sm font-bold text-orange-300 group-hover:text-orange-200 transition-colors">
+                            <MathView text={idxItem.term} inline />
+                          </div>
+
+                          {idxItem.definition && (
+                            <div className="text-xs text-gray-300 leading-relaxed">
+                              <MathView text={idxItem.definition} />
+                            </div>
+                          )}
+
+                          {idxItem.formula && (
+                            <div className="bg-black/40 border border-white/5 rounded-lg p-2 font-mono text-xs text-blue-300 overflow-x-auto">
+                              <MathView text={idxItem.formula} isFormula inline />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 하단 버튼그룹 영역 */}
+                        <div className="flex items-center justify-between pt-2.5 border-t border-white/5 mt-3">
+                          <div className="flex items-center gap-2">
+                            {idxItem.created_at && (
+                              <span className="text-[10px] text-gray-500 font-mono">
+                                {new Date(idxItem.created_at).toLocaleDateString("ko-KR")}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openDeleteModal("index", idxItem)}
+                            className="px-2.5 py-1 rounded-lg border border-red-500/20 bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm ml-auto"
+                            title="이 색인 항목 삭제"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>삭제</span>
+                          </button>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                ) : (
+                  /* ── 개념 색인 테이블 뷰 ── */
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-white/5 border-b border-white/10 text-gray-400 font-semibold text-[11px]">
+                        <tr>
+                          <th className="py-2.5 px-3 w-12 text-center">#</th>
+                          <th className="py-2.5 px-3 w-36">용어명</th>
+                          <th className="py-2.5 px-3 w-28">소속 단원</th>
+                          <th className="py-2.5 px-3 w-20">분류</th>
+                          <th className="py-2.5 px-3">정의</th>
+                          <th className="py-2.5 px-3 w-32">대표 수식</th>
+                          <th className="py-2.5 px-3 w-24 text-center">등장 페이지</th>
+                          <th className="py-2.5 px-3 w-16 text-center">관리</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {filteredIndex.map((idxItem, idx) => (
+                          <tr key={idx} className="hover:bg-white/5 transition-colors">
+                            <td className="py-2 px-3 text-center text-gray-500 font-mono text-[10px]">{idx + 1}</td>
+                            <td className="py-2 px-3 font-bold text-orange-300">
+                              <MathView text={idxItem.term} inline />
+                            </td>
+                            <td className="py-2 px-3 text-gray-400 text-[10px] truncate max-w-[140px]">{idxItem.chapter_title || "-"}</td>
+                            <td className="py-2 px-3">
+                              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[10px]">
+                                {idxItem.category || "개념"}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-gray-300 text-[11px]">
+                              <MathView text={idxItem.definition} />
+                            </td>
+                            <td className="py-2 px-3 font-mono text-[10px] text-purple-300">
+                              {idxItem.formula ? <MathView text={idxItem.formula} isFormula inline /> : "-"}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                                {idxItem.pages?.map(p => (
+                                  <span key={p} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 font-mono text-[9px]">
+                                    p.{p}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => openDeleteModal("index", idxItem)}
+                                className="px-2 py-1 rounded-lg border border-red-500/20 bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 text-xs font-semibold inline-flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                                title="이 색인 항목 삭제"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>삭제</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )
           )}
@@ -2577,6 +2853,81 @@ export default function DictionaryPage() {
               >
                 <Database className="w-3.5 h-3.5" />
                 <span>DB에 즉시 적재</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 6.5 항목 개별 삭제 확인 모달 ── */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          onMouseDown={e => {
+            if (e.target === e.currentTarget && !isDeleting) setDeleteTarget(null);
+          }}
+        >
+          <div className="glass w-[440px] max-w-full rounded-2xl p-5 border border-red-500/30 bg-[#0d111a] shadow-2xl flex flex-col gap-4">
+            {/* 모달 헤더 */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-gray-100 flex items-center gap-2">
+                  <span>삭제하시겠습니까?</span>
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  선택한 항목을 데이터베이스에서 영구히 삭제합니다.
+                </p>
+              </div>
+            </div>
+
+            {/* 대상 항목 정보 요약 */}
+            <div className="bg-black/50 border border-white/10 rounded-xl p-3 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-gray-400">
+                <span>항목 구분</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-gray-200 border border-white/10">
+                  {deleteTarget.type === "dictionary"
+                    ? "수학 딕셔너리"
+                    : deleteTarget.type === "flashcards"
+                    ? "플래시카드"
+                    : deleteTarget.type === "quizzes"
+                    ? "퀴즈 은행"
+                    : "개념 색인"}
+                </span>
+              </div>
+              <div className="text-xs font-semibold text-orange-300 break-words line-clamp-3">
+                <MathView text={deleteTarget.title} inline />
+              </div>
+            </div>
+
+            <p className="text-[11px] text-red-400/90 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">
+              ⚠️ 이 작업은 되돌릴 수 없으며, 삭제 후 즉시 지식그래프 DB 및 화면 목록에서 제외됩니다.
+            </p>
+
+            {/* 모달 하단 버튼 액션 */}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-gray-300 transition-all cursor-pointer disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-red-600/30 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>예</span>
               </button>
             </div>
           </div>

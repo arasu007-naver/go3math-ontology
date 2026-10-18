@@ -7,7 +7,11 @@ import {
   getQuizzes,
   saveQuizzes,
   getBookIndex,
-  saveBookIndex
+  saveBookIndex,
+  deleteDictionaryItem,
+  deleteFlashcard,
+  deleteQuiz,
+  deleteBookIndex
 } from "@/lib/dictionaryDb";
 
 export async function GET(req: Request) {
@@ -65,3 +69,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err.message || "Failed to save dictionary data" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const body = await req.json();
+    const { type, id, bookStem, term, front, question } = body;
+
+    let success = false;
+    const numId = id !== undefined && id !== null ? Number(id) : undefined;
+
+    if (type === "dictionary") {
+      success = await deleteDictionaryItem(numId, bookStem, term);
+    } else if (type === "flashcards") {
+      success = await deleteFlashcard(numId, bookStem, front);
+    } else if (type === "quizzes") {
+      success = await deleteQuiz(numId, bookStem, question);
+    } else if (type === "index" || type === "bookIndex") {
+      success = await deleteBookIndex(numId, bookStem, term);
+    } else {
+      return NextResponse.json({ error: "올바른 항목 타입이 아닙니다." }, { status: 400 });
+    }
+
+    return NextResponse.json({ success });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[API /api/dictionary DELETE]", err);
+    return NextResponse.json({ error: err.message || "항목 삭제에 실패했습니다." }, { status: 500 });
+  }
+}
+
