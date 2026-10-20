@@ -57,13 +57,26 @@ const MATHPIX_LABEL: Record<ConvertLogView["status"] | "none", string> = {
 };
 type PromptTaskKey = "toc" | "flashcards" | "quizzes" | "index" | "dictionary";
 
+// ── 프롬프트용 도서 파일명 헬퍼 (.pdf 확장자를 .md로 변경) ──
+function toPromptMdFilename(title: string): string {
+  const t = (title || "고등수학").trim();
+  if (/\.pdf$/i.test(t)) {
+    return t.replace(/\.pdf$/i, ".md");
+  }
+  if (/\.md$/i.test(t)) {
+    return t;
+  }
+  return `${t}.md`;
+}
+
 // ── 0. TOC 목차 JSON 추출 프롬프트 생성 헬퍼 ──
 function getTocExtractionPrompt(bookTitle: string) {
-  return `이 교재(${bookTitle})의 앞부분에 목차(TOC)가 존재하면, 전체 대단원(Chapter)과 중/소단원(Section), 세부 항목(Item) 및 시작 페이지 번호를 아래 표준 JSON 포맷으로 구성하여, 사용자가 toc.json 파일로 다운로드받을 수 있도록 JSON 코드 블록을 작성해 줘.
+  const mdFileName = toPromptMdFilename(bookTitle);
+  return `이 교재(${mdFileName})의 앞부분에 목차(TOC)가 존재하면, 전체 대단원(Chapter)과 중/소단원(Section), 세부 항목(Item) 및 시작 페이지 번호를 아래 표준 JSON 포맷으로 구성하여, 사용자가 toc.json 파일로 다운로드받을 수 있도록 JSON 코드 블록을 작성해 줘.
 
 [표준 TOC JSON 포맷 규격]
 {
-  "bookTitle": "${bookTitle}",
+  "bookTitle": "${mdFileName}",
   "chapters": [
     {
       "chapterId": "I",
@@ -101,8 +114,9 @@ function getUnitIndex(unit: TocUnitRange): number {
 
 // ── 단원별 4대 개별 프롬프트 생성 헬퍼 ──
 function getFlashcardPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인 항목을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 플래시카드를 하나의 JSON 배열 형식으로 추출해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인 항목을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 플래시카드를 하나의 JSON 배열 형식으로 추출해 줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
@@ -150,9 +164,10 @@ function getFlashcardPrompt(bookTitle: string, bookId: string, unit: TocUnitRang
 }
 
 function getQuizPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
 
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage})에서 ${index}-dictionary.json의 딕셔너리의 내용을 모두 사용하여 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage})에서 ${index}-dictionary.json의 딕셔너리의 내용을 모두 사용하여 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘.
 
 [단원 지정 및 문항 구성 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
@@ -224,8 +239,9 @@ function getQuizPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
 }
 
 function getIndexPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 용어의 색인(Index)을 아래 두 domain으로 구분하여 하나의 JSON 배열로 추출해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 용어의 색인(Index)을 아래 두 domain으로 구분하여 하나의 JSON 배열로 추출해 줘.
 - "수학 내적": 수학 용어, 개념, 정리(Theorem), 공식 등 수학 개념 그 자체
 - "수학 외적": 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)
 
@@ -308,8 +324,9 @@ function getMetaCategoryRules() {
 }
 
 function getDictionaryPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
+  const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
-  return `이 교재(${bookTitle})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 대해 ${index}-indices.json의 색인 항목을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 하나의 JSON 배열로 작성해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 대해 ${index}-indices.json의 색인 항목을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 하나의 JSON 배열로 작성해 줘.
 
 [단원 지정 규칙]
 - 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
@@ -1585,7 +1602,7 @@ export default function DictionaryPage() {
     };
   }, [tocUnits, promptTargetUnitId]);
 
-  const currentBookTitle = book?.title || "고등수학";
+  const currentBookTitle = toPromptMdFilename(book?.title || "고등수학");
   const currentBookId = book?.sourceId || "";
 
   return (

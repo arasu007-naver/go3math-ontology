@@ -78,7 +78,11 @@ export function commentaryList(toc: TocData | null): string[] {
   return [];
 }
 
-export const stripExt = (s: string) => String(s || "").replace(/\.json$/i, "").replace(/\.pdf$/i, "");
+export const stripExt = (s: string) =>
+  String(s || "")
+    .replace(/\.json$/i, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/\.md$/i, "");
 
 import type { TocUnitRange } from "./types";
 export { type TocUnitRange };
