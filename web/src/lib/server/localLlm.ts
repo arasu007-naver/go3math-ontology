@@ -1,7 +1,7 @@
 import { KINDS, TEMPLATES, type Catalog, type Plan } from "./agentTemplates";
 
 // 로컬 LLM(go3math-llm, OpenAI 호환). Jev 가 못 정한 질문을 템플릿 + 인자 + 키워드로 바꾼다. SQL 은 쓰지 않는다.
-const BASE = (process.env.GO3_LLM_BASE_URL || "https://go3math-llm.qoolla.com").replace(/\/$/, "");
+const BASE = (process.env.GO3_LLM_BASE_URL || "https://dev-llm.qoolla.com").replace(/\/$/, "");
 const MODEL = process.env.LOCAL_LLM_MODEL || "Qwen3.6-35B-A3B-bf16";
 
 export async function localPlan(question: string, cat: Catalog): Promise<Plan> {

@@ -1,0 +1,55 @@
+2026-10-20 11:48:54 | START 수학독본(3) bookId=27 notebook=8ddca503 range 1~13 (14 units, 14=해답 제외)
+2026-10-20 11:52:29 | 27-1 | indices | OK | 42 items, ch=5.1, 216s
+2026-10-20 11:58:47 | 27-1 | dictionary | OK | 42 items, ch=5.1, 372s (strict JSON parse fail, LaTeX escape 추정, 배열 닫힘)
+2026-10-20 12:00:41 | 27-1 | flashcards | OK | 42 items, ch=5.1, 107s
+2026-10-20 12:13:06 | 27-1 | quizzes | OK | 84 items (=2x42), ch=5.1, 736s
+2026-10-20 12:18:29 | 27-2 | indices | OK | 33 items, ch=5.2, 317s
+2026-10-20 12:23:49 | 27-2 | dictionary | OK | 33 items, ch=5.2, 316s
+2026-10-20 12:29:03 | 27-2 | flashcards | OK | 33 items, ch=5.2, ~208s (탭이 노트북 목록으로 이동해 재접속·헬퍼 재주입 후 전송)
+2026-10-20 12:41:56 | 27-2 | quizzes | OK | 66 items (=2x33), ch=5.2, 735s (앱 교재명이 .pdf→.md로 바뀌어 헬퍼 맞춤 후 전송)
+2026-10-20 12:45:35 | 27-3 | indices | OK | 34 items, ch=5.3, 213s
+2026-10-20 12:51:00 | 27-3 | dictionary | OK | 34 items, ch=5.3, 318s
+2026-10-20 12:53:58 | 27-3 | flashcards | OK | 34 items, ch=5.3, 172s
+2026-10-20 13:01:07 | 27-3 | quizzes | OK | 68 items (=2x34), ch=5.3, 423s
+2026-10-20 13:04:47 | 27-4 | indices | OK | 21 items, ch=6.1, 213s
+2026-10-20 13:08:26 | 27-4 | dictionary | OK | 21 items, ch=6.1, 212s
+2026-10-20 13:11:45 | 27-4 | flashcards | OK | 21 items, ch=6.1, 192s
+2026-10-20 13:17:10 | 27-4 | quizzes | OK | 42 items (=2x21), ch=6.1, 317s
+2026-10-20 13:22:34 | 27-5 | indices | OK | 23 items, ch=6.2, 318s
+2026-10-20 13:28:01 | 27-5 | dictionary | OK | 23 items, ch=6.2, 317s
+2026-10-20 13:36:20 | 27-5 | flashcards | OK | 23 items, ch=6.2, 492s
+2026-10-20 13:41:55 | 27-5 | quizzes | OK | 46 items (=2x23), ch=6.2, 317s
+2026-10-20 13:45:36 | 27-6 | indices | OK | 25 items, ch=6.3, 213s (전송 전 노트북 새로고침)
+2026-10-20 13:51:01 | 27-6 | dictionary | OK | 25 items, ch=6.3, 318s
+2026-10-20 13:52:54 | 27-6 | flashcards | OK | 25 items, ch=6.3, 107s
+2026-10-20 14:00:12 | 27-6 | quizzes | OK | 50 items (=2x25), ch=6.3, 423s
+2026-10-20 14:03:00 | 27-7 | indices | OK | 21 items, ch=6.4, 161s (전송 전 노트북 새로고침)
+2026-10-20 14:06:40 | 27-7 | dictionary | OK | 21 items, ch=6.4, 213s
+2026-10-20 14:08:34 | 27-7 | flashcards | OK | 21 items, ch=6.4, 107s
+2026-10-20 14:17:38 | 27-7 | quizzes | OK | 42 items (=2x21), ch=6.4, 529s
+2026-10-20 14:20:36 | 27-8 | indices | OK | 18 items, ch=7.1, 172s (전송 전 노트북 새로고침)
+2026-10-20 14:24:16 | 27-8 | dictionary | OK | 18 items, ch=7.1, 212s
+2026-10-20 14:26:10 | 27-8 | flashcards | OK | 18 items, ch=7.1, 108s
+2026-10-20 14:31:41 | 27-8 | quizzes | OK | 36 items (=2x18), ch=7.1, 318s
+2026-10-20 14:33:35 | 27-9 | indices | OK | 18 items, ch=7.2, 108s (전송 전 노트북 새로고침)
+2026-10-20 14:37:15 | 27-9 | dictionary | OK | 18 items, ch=7.2, 213s (strict parse fail, 배열 닫힘)
+2026-10-20 14:39:16 | 27-9 | flashcards | RETRY | 1차: 36 items = 같은 18장 2회 반복(고유 18), ch=7.2, 108s → 1회 재전송
+2026-10-20 14:41:11 | 27-9 | flashcards | OK (retry 1) | 18 items 고유 18, ch=7.2, 106s
+2026-10-20 14:46:56 | 27-9 | quizzes | OK | 36 items (=2x18, 고유 문항 36; multiple_choice 문자열 14·descriptive 18로 4개 표기 상이 추정), ch=7.2, 318s
+2026-10-20 14:49:51 | 27-10 | indices | OK | 18 items, ch=7.3, 175s (전송 전 노트북 새로고침)
+2026-10-20 14:53:31 | 27-10 | dictionary | OK | 18 items, ch=7.3, 213s
+2026-10-20 14:55:26 | 27-10 | flashcards | OK | 18 items 고유 18, ch=7.3, 109s
+2026-10-20 15:00:58 | 27-10 | quizzes | OK | 36 items (=2x18), ch=7.3, 318s
+2026-10-20 15:04:37 | 27-11 | indices | OK | 19 items, ch=8.1, 212s (전송 전 노트북 새로고침)
+2026-10-20 15:08:17 | 27-11 | dictionary | OK | 19 items, ch=8.1, 212s
+2026-10-20 15:10:12 | 27-11 | flashcards | OK | 19 items 고유 19, ch=8.1, 108s
+2026-10-20 15:15:45 | 27-11 | quizzes | OK | 38 items (=2x19), ch=8.1, 318s
+2026-10-20 15:17:39 | 27-12 | indices | OK | 14 items, ch=8.2, 108s (전송 전 노트북 새로고침)
+2026-10-20 15:21:20 | 27-12 | dictionary | OK | 14 items, ch=8.2, 214s
+2026-10-20 15:23:16 | 27-12 | flashcards | OK | 14 items 고유 14, ch=8.2, 109s
+2026-10-20 15:28:50 | 27-12 | quizzes | OK | 28 items (=2x14), ch=8.2, 318s
+2026-10-20 15:31:08 | 27-13 | indices | OK | 20 items, ch=8.3, 131s (전송 전 노트북 새로고침)
+2026-10-20 15:34:47 | 27-13 | dictionary | OK | 20 items, ch=8.3, 212s
+2026-10-20 15:36:40 | 27-13 | flashcards | OK | 20 items 고유 20, ch=8.3, 109s
+2026-10-20 15:42:16 | 27-13 | quizzes | OK | 40 items (=2x20), ch=8.3, 330s
+2026-10-20 15:42:16 | END 52/52 성공 (재시도 1회: 9번 플래시카드 중복 출력)
