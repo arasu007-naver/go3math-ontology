@@ -10,6 +10,13 @@ export type TocData = {
   documentId?: number;
 };
 
+// office-manager md-viewer 가 S3 <S3_MD_PREFIX>/<stem>.toc.json 에 저장하는 라인 TOC (대단원별 MD 라인 범위)
+export type LineToc = {
+  bookTitle?: string;
+  mdKey?: string;
+  chapters?: { chapterId?: string; chapterTitle?: string; startLine?: number; endLine?: number }[];
+};
+
 export type BookTocRow = { id: number; bookTitle: string; pdfFilename: string; toc: string; [k: string]: unknown };
 export type DocEntry = { id: string; name: string; main_stem: string; status: string };
 
@@ -25,6 +32,7 @@ export type SelectedBook = {
   documentId: number | null;
   toc: TocData | null;
   commentaryStem: string; // 첫 번째 해설서 (없으면 "")
+  lineToc?: LineToc | null; // 있으면 단원 목록/프롬프트 범위를 MD 라인으로 쓴다
 };
 
 // 그래프 스키마 (스펙: 도서 / TOC 항목 / 페이지 / 문단)
@@ -146,6 +154,9 @@ export type TocUnitRange = {
   sectionTitle?: string;
   startPage: number;
   endPage: number;
+  // 라인 TOC 단원이면 MD 라인 범위 (startPage/endPage 는 같은 대단원의 페이지 범위)
+  startLine?: number;
+  endLine?: number;
   level: "chapter" | "section";
   order: number;
 };

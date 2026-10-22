@@ -33,7 +33,7 @@ import BookBars from "@/components/BookBars";
 import MathView from "@/components/MathView";
 import { typeset } from "@/lib/format";
 import { fetchToc } from "@/lib/ocrApi";
-import { commentaryList, extractTocUnitsWithPageRanges, stripExt } from "@/lib/toc";
+import { commentaryList, extractTocUnitsWithLineRanges, extractTocUnitsWithPageRanges, hasLineRange, stripExt, unitRangeLabel, unitRangeText } from "@/lib/toc";
 import type {
   BookTocRow,
   DocEntry,
@@ -43,7 +43,8 @@ import type {
   FlashcardItem,
   QuizItem,
   BookIndexItem,
-  TocUnitRange
+  TocUnitRange,
+  LineToc
 } from "@/lib/types";
 
 type Toast = { msg: string; type: "success" | "error" | "info" } | null;
@@ -116,10 +117,10 @@ function getUnitIndex(unit: TocUnitRange): number {
 function getFlashcardPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
   const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
-  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에서 ${index}-indices.json의 색인 항목을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 플래시카드를 하나의 JSON 배열 형식으로 추출해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (${unitRangeLabel(unit)}) 단원에서 ${index}-indices.json의 색인 항목을 모두 활용해서 학생이 반드시 암기하고 숙지해야 할 플래시카드를 하나의 JSON 배열 형식으로 추출해 줘.
 
 [단원 지정 규칙]
-- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
+- 대상 단원: ${unit.title} (${unitRangeText(unit)})
 - 반드시 해당 단원 범위 내의 내용만을 바탕으로 추출할 것.
 - 각 카드의 domain과 category는 근거가 된 색인 항목의 값을 그대로 따를 것.
 - "수학 내적" 카드는 핵심 개념·정의·공식을 묻고, "수학 외적" 카드는 인물·유래, 전략의 이름이나 적용 상황 등 메타 정보를 기억하고 활용하도록 물을 것.
@@ -167,10 +168,10 @@ function getQuizPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
   const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
 
-  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage})에서 ${index}-dictionary.json의 딕셔너리의 내용을 모두 사용하여 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (${unitRangeLabel(unit)})에서 ${index}-dictionary.json의 딕셔너리의 내용을 모두 사용하여 개념 이해도를 정밀평가하는 4지 선다형의 퀴즈를 먼저 생성하고 그리고 생성한 4지 선다형을 서술형으로 전환한 퀴즈 2벌을 작성하는데 각 퀴즈에 대하여 3단계 소크라테스식 힌트를 JSON 배열로 생성해 줘.
 
 [단원 지정 및 문항 구성 규칙]
-- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
+- 대상 단원: ${unit.title} (${unitRangeText(unit)})
 - 반드시 제공하는 단원 딕셔너리의 정의·공식·오개념·배경·적용 사례를 바탕으로 문제를 구성할 것.
 - 각 문항의 domain과 category는 근거가 된 딕셔너리 항목의 값을 그대로 따를 것.
 - "수학 외적" 문항은 단순 암기(인물·연도)보다 "이 상황에 어떤 전략/학습법이 적절한가", "이 개념이 왜 등장했는가"처럼 이해와 적용을 묻는 문항을 우선하고, 교재 서술에 근거할 것.
@@ -241,12 +242,12 @@ function getQuizPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
 function getIndexPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
   const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
-  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 등장하는 용어의 색인(Index)을 아래 두 domain으로 구분하여 하나의 JSON 배열로 추출해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (${unitRangeLabel(unit)}) 단원에 등장하는 용어의 색인(Index)을 아래 두 domain으로 구분하여 하나의 JSON 배열로 추출해 줘.
 - "수학 내적": 수학 용어, 개념, 정리(Theorem), 공식 등 수학 개념 그 자체
 - "수학 외적": 수학 학습을 둘러싼 메타 정보(유래·역사, 교육과정·정책, 학습법, 문제해결 전략, 교수법, 실생활·타 교과 맥락, 수학적 태도·역량)
 
 [단원 지정 규칙]
-- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
+- 대상 단원: ${unit.title} (${unitRangeText(unit)})
 - 본문뿐 아니라 단원 도입글, 학습 목표, 읽기 자료, 수학자 이야기, 쉬어가기/탐구 활동 박스, 교사용 지도 노트, 평가 안내 등 주변 서술까지 빠짐없이 살필 것.
 - 해당 단원 페이지에 등장하는 모든 중요 용어를 누락 없이 색인화할 것.
 - 모든 항목의 chapter_title에는 "${unit.title}"을 정확히 기재할 것.
@@ -326,10 +327,10 @@ function getMetaCategoryRules() {
 function getDictionaryPrompt(bookTitle: string, bookId: string, unit: TocUnitRange) {
   const mdFileName = toPromptMdFilename(bookTitle);
   const index = `${bookId}-${getUnitIndex(unit)}`;
-  return `이 교재(${mdFileName})의 【${unit.title}】 (p.${unit.startPage} ~ p.${unit.endPage}) 단원에 대해 ${index}-indices.json의 색인 항목을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 하나의 JSON 배열로 작성해 줘.
+  return `이 교재(${mdFileName})의 【${unit.title}】 (${unitRangeLabel(unit)}) 단원에 대해 ${index}-indices.json의 색인 항목을 모두 사용하여 깊이 있는 딕셔너리 백과 온톨로지 항목들을 하나의 JSON 배열로 작성해 줘.
 
 [단원 지정 규칙]
-- 대상 단원: ${unit.title} (페이지 범위: p.${unit.startPage} ~ p.${unit.endPage})
+- 대상 단원: ${unit.title} (${unitRangeText(unit)})
 - 색인 항목 1개당 딕셔너리 항목 1개를 작성할 것. 각 항목의 domain과 category는 색인 값을 그대로 따를 것.
 - "수학 내적" 항목은 정의부터 기하학적 의미, 오개념, 예제까지 포괄적으로 작성할 것.
 - "수학 외적" 항목은 교재에 실제로 서술된 내용만 근거로 삼을 것. 교재에 없는 유래·연도·인물 정보를 외부 지식으로 지어내지 말 것.
@@ -571,6 +572,13 @@ export default function DictionaryPage() {
     setSelectedUnitId("all");
     setSelectedChapterFilter("all");
     pushToast(`도서 '${b.title}'이(가) 선택되었습니다.`, "info");
+    // md-viewer 에서 작성한 라인 TOC(S3 toc.json) 가 있으면 단원 목록을 그것으로 바꾼다 (없으면 페이지 TOC 유지)
+    fetch(`/api/dictionary/line-toc?bookStem=${encodeURIComponent(b.stem)}`)
+      .then((res) => res.json())
+      .then((data: { toc?: LineToc | null }) =>
+        setBook((prev) => (prev && prev.sourceId === b.sourceId && prev.stem === b.stem ? { ...prev, lineToc: data.toc ?? null } : prev))
+      )
+      .catch(() => {});
   }, [pushToast]);
 
   const onSelectBookToc = useCallback((row: BookTocRow) => {
@@ -609,9 +617,12 @@ export default function DictionaryPage() {
   }, [onError, selectBook]);
 
   // ── TOC 기반 단원 목록 산출 ──
+  const pageToc = book?.toc ?? null;
+  const lineToc = book?.lineToc ?? null;
   const tocUnits = useMemo<TocUnitRange[]>(() => {
-    return extractTocUnitsWithPageRanges(book?.toc || null);
-  }, [book?.toc]);
+    if (lineToc?.chapters?.length) return extractTocUnitsWithLineRanges(lineToc, pageToc);
+    return extractTocUnitsWithPageRanges(pageToc);
+  }, [pageToc, lineToc]);
 
   // ── DB 데이터 로드 ──
   const loadData = useCallback(async (stem?: string) => {
@@ -1672,10 +1683,21 @@ export default function DictionaryPage() {
               <option value="all" className="bg-[#121824] text-white">전체 단원 ({tocUnits.length}개)</option>
               {tocUnits.map((u) => (
                 <option key={u.id} value={u.id} className="bg-[#121824] text-gray-200">
-                  {u.title} (p.{u.startPage}~{u.endPage})
+                  {u.title} ({unitRangeLabel(u)})
                 </option>
               ))}
             </select>
+            {/* 단원 목록의 출처: S3 라인 TOC(toc.json) 또는 DB 페이지 TOC */}
+            {book && (
+              <span
+                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${
+                  book.lineToc?.chapters?.length ? "bg-orange-500/20 text-orange-300" : "bg-white/10 text-gray-400"
+                }`}
+                title={book.lineToc?.chapters?.length ? book.lineToc.mdKey || "toc.json" : "S3 toc.json 이 없어 페이지 TOC 사용"}
+              >
+                {book.lineToc?.chapters?.length ? "MD 라인 TOC" : "페이지 TOC"}
+              </span>
+            )}
           </div>
 
           <div className="h-4 w-[1px] bg-white/10 mx-1"></div>
@@ -1800,7 +1822,7 @@ export default function DictionaryPage() {
                         </h3>
                       </div>
                       <span className="text-[10px] font-mono text-gray-400 block mt-0.5">
-                        페이지: <strong className="text-emerald-400">p.{unit.startPage} ~ p.{unit.endPage}</strong>
+                        {hasLineRange(unit) ? "MD 라인" : "페이지"}: <strong className="text-emerald-400">{unitRangeLabel(unit)}</strong>
                       </span>
                     </div>
 
@@ -2702,14 +2724,14 @@ export default function DictionaryPage() {
                 >
                   {tocUnits.map(u => (
                     <option key={u.id} value={u.id} className="bg-[#121824] text-gray-200">
-                      {u.title} (p.{u.startPage} ~ p.{u.endPage})
+                      {u.title} ({unitRangeLabel(u)})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="text-xs text-indigo-300 font-mono font-bold bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-lg">
-                단원 범위: p.{activePromptUnit.startPage} ~ p.{activePromptUnit.endPage}
+                단원 범위: {unitRangeLabel(activePromptUnit)}
               </div>
             </div>
 
@@ -2764,7 +2786,7 @@ export default function DictionaryPage() {
                           <Layers className="w-3.5 h-3.5" /> 1. 플래시카드 추출 프롬프트
                         </span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-purple-900/40 text-purple-200 border border-purple-500/20 font-mono">
-                          단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
+                          단원: {activePromptUnit.title} ({unitRangeLabel(activePromptUnit)})
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2813,7 +2835,7 @@ export default function DictionaryPage() {
                           <HelpCircle className="w-3.5 h-3.5" /> 2. 4지선다 퀴즈 & 소크라테스 힌트 프롬프트
                         </span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-teal-900/40 text-teal-200 border border-teal-500/20 font-mono">
-                          단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
+                          단원: {activePromptUnit.title} ({unitRangeLabel(activePromptUnit)})
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2862,7 +2884,7 @@ export default function DictionaryPage() {
                           <Hash className="w-3.5 h-3.5" /> 3. 개념 색인(Index) 추출 프롬프트
                         </span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-blue-900/40 text-blue-200 border border-blue-500/20 font-mono">
-                          단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
+                          단원: {activePromptUnit.title} ({unitRangeLabel(activePromptUnit)})
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2911,7 +2933,7 @@ export default function DictionaryPage() {
                           <BookOpen className="w-3.5 h-3.5" /> 4. 심층 딕셔너리 구축 프롬프트
                         </span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-orange-900/40 text-orange-200 border border-orange-500/20 font-mono">
-                          단원: {activePromptUnit.title} (p.{activePromptUnit.startPage}~p.{activePromptUnit.endPage})
+                          단원: {activePromptUnit.title} ({unitRangeLabel(activePromptUnit)})
                         </span>
                       </div>
                       <div className="flex items-center gap-2">

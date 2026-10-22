@@ -1,4 +1,4 @@
-import type { ParagraphKind, TocData, TocNodeInput } from "./types";
+import type { LineToc, ParagraphKind, TocData, TocNodeInput } from "./types";
 
 const toPage = (v: unknown): number | null => {
   const n = parseInt(String(v), 10);
@@ -171,4 +171,33 @@ export function extractTocUnitsWithPageRanges(toc: TocData | null, maxPage: numb
   return result;
 }
 
+// 라인 TOC(toc.json) 의 대단원마다 단원 하나. 범위는 MD 라인이고,
+// 페이지 범위(startPage/endPage)는 페이지 TOC 에서 같은 대단원 제목을 찾아 채운다 (없으면 1~maxPage)
+export function extractTocUnitsWithLineRanges(lineToc: LineToc, pageToc: TocData | null, maxPage: number = 300): TocUnitRange[] {
+  const pageUnits = extractTocUnitsWithPageRanges(pageToc, maxPage);
+  return (lineToc.chapters ?? []).map((ch, ci) => {
+    const title = `${ch.chapterId ?? ""} ${ch.chapterTitle ?? ""}`.trim() || `제${ci + 1}장`;
+    const pages = pageUnits.filter((u) => u.chapterTitle === title);
+    return {
+      id: `line_ch_${ci}`,
+      title,
+      chapterTitle: title,
+      startPage: pages.length ? Math.min(...pages.map((u) => u.startPage)) : 1,
+      endPage: pages.length ? Math.max(...pages.map((u) => u.endPage)) : maxPage,
+      startLine: ch.startLine || 0,
+      endLine: ch.endLine || 0,
+      level: "chapter" as const,
+      order: ci,
+    };
+  });
+}
 
+// 단원 범위 표기: 라인이 지정된 단원은 MD 라인, 아니면 페이지
+export const hasLineRange = (u: TocUnitRange) => !!u.startLine && u.startLine > 0;
+export function unitRangeLabel(u: TocUnitRange): string {
+  return hasLineRange(u) ? `L${u.startLine} ~ L${u.endLine}` : `p.${u.startPage} ~ p.${u.endPage}`;
+}
+// 프롬프트용 범위 설명
+export function unitRangeText(u: TocUnitRange): string {
+  return hasLineRange(u) ? `MD 라인 범위: L${u.startLine} ~ L${u.endLine}` : `페이지 범위: p.${u.startPage} ~ p.${u.endPage}`;
+}

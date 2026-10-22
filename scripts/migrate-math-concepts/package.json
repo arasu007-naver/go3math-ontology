@@ -1,0 +1,22 @@
+{
+  "name": "migrate-math-concepts",
+  "private": true,
+  "type": "module",
+  "description": "MariaDB math_concepts → KG(PostgreSQL) 22개정 단원 매핑 (specs/math-concepts-to-kg-mapping-spec.md)",
+  "scripts": {
+    "ddl": "node --env-file-if-exists=.env apply-ddl.mjs",
+    "survey":"node --env-file-if-exists=.env 00-survey.mjs",
+    "merge": "node --env-file-if-exists=.env 01-merge.mjs",
+    "candidates": "node --env-file-if-exists=.env 02-candidates.mjs",
+    "judge": "node --env-file-if-exists=.env 03-judge.mjs",
+    "review": "node --env-file-if-exists=.env 04-review.mjs",
+    "write-kg": "node --env-file-if-exists=.env 05-write-kg.mjs",
+    "test": "node --test test/pipeline.test.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "mysql2": "^3.11.0",
+    "pg": "^8.23.1",
+    "zod": "^4.6.5"
+  }
+}
