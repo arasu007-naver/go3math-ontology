@@ -26,9 +26,11 @@ import {
   Trash2,
   LayoutGrid,
   List,
-  FolderUp
+  FolderUp,
+  Scissors
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
+import SplitMdModal from "@/components/SplitMdModal";
 import BookBars from "@/components/BookBars";
 import MathView from "@/components/MathView";
 import { typeset } from "@/lib/format";
@@ -547,6 +549,7 @@ export default function DictionaryPage() {
 
   const [batchInvestigation, setBatchInvestigation] = useState<BatchInvestigationData | null>(null);
   const [isSubmittingBatch, setIsSubmittingBatch] = useState(false);
+  const [showSplitMdModal, setShowSplitMdModal] = useState(false);
   const tabContentRef = useRef<HTMLDivElement | null>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
 
@@ -1702,14 +1705,20 @@ export default function DictionaryPage() {
 
           <div className="h-4 w-[1px] bg-white/10 mx-1"></div>
 
-          {/* NotebookLM 프롬프트 팩 (개별 프롬프트 복사 센터) */}
+          {/* md file 분할 (toc.json 라인 기준 MinIO 분할 저장) */}
           <button
-            onClick={() => openPromptModalForUnit()}
-            className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
-            title="NotebookLM용 TOC 및 단원별 4대 프롬프트 개별 복사 (비용 0원 워크플로우)"
+            onClick={() => {
+              if (!book) {
+                pushToast("먼저 도서를 선택해 주세요.", "error");
+                return;
+              }
+              setShowSplitMdModal(true);
+            }}
+            className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5 cursor-pointer"
+            title="toc.json 라인 범위(startLine ~ endLine)를 기준으로 chapter만 잘라내어 MinIO 저장소(mathpix/<도서명>/<chapter>.md)에 저장"
           >
-            <Copy className="w-4 h-4 text-amber-300" />
-            <span>NotebookLM 프롬프트 팩</span>
+            <Scissors className="w-4 h-4 text-black" />
+            <span>md file 분할</span>
           </button>
 
           {/* 결과 붙여넣기 */}
@@ -3285,6 +3294,19 @@ export default function DictionaryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── 6.5 MD 파일 분할 모달 ── */}
+      {book && (
+        <SplitMdModal
+          isOpen={showSplitMdModal}
+          onClose={() => setShowSplitMdModal(false)}
+          bookStem={book.stem}
+          bookTitle={book.title}
+          onSuccess={(count) => {
+            pushToast(`총 ${count}개 단원이 MinIO(mathpix/${book.stem}/)에 분할 저장되었습니다.`, "success");
+          }}
+        />
       )}
 
       {/* ── 7. 토스트 알림 ── */}
