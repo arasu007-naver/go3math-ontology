@@ -66,3 +66,16 @@ export async function jevVerify(question: string, plan: Plan): Promise<number> {
   });
   return a.fits.noul;
 }
+
+// legacy2ontology 중복제거: 두 개념이 같은 개념인지 same|different 로 판정 → same 확률
+export async function jevSameConcept(a: { title: string; statement: string }, b: { title: string; statement: string }): Promise<number> {
+  const state = `concept A\ntitle: ${a.title}\nstatement: ${a.statement}\n\nconcept B\ntitle: ${b.title}\nstatement: ${b.statement}`;
+  const r = await jev<{ same: ChoiceAnswer }>(state, {
+    same: {
+      type: "choice",
+      instructions: "Do concept A and concept B describe the same Korean school math concept (a duplicate entry, possibly worded differently)? Math is AsciiMath in backticks.",
+      criteria: { same: "A and B are the same concept", different: "A and B are different concepts" },
+    },
+  });
+  return r.same.probabilities?.same ?? (r.same.choice === "same" ? r.same.confidence : 1 - r.same.confidence);
+}
