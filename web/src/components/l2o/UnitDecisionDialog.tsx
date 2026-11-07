@@ -135,7 +135,7 @@ export default function UnitDecisionDialog({
               {q.trim() && !searched.length && <p className="text-[11px] text-gray-500">후보 밖에서 찾은 단원이 없습니다.</p>}
             </div>
             <label className="text-[11px] text-gray-400 flex flex-col gap-1">
-              사유 (필수)
+              사유 (선택)
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -149,7 +149,7 @@ export default function UnitDecisionDialog({
               </span>
               <button
                 onClick={save}
-                disabled={!picked || !reason.trim() || saving || picked === cands.currentUnitId}
+                disabled={!picked || saving || picked === cands.currentUnitId}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white disabled:opacity-40"
               >
                 {saving ? "기록 중…" : "확정 (KG 반영)"}

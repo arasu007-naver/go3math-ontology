@@ -8,7 +8,7 @@ import { pool } from "./l2oPool";
 // 3) l2o.migration_result: migrated + kg_concept_id 연결.
 // 원본 MariaDB 는 읽기만 한다.
 
-export type KgWrite = { groupId: number; unitId: string; judgedBy: string; confidence: number | null; rationale: string; jobId: string | null };
+export type KgWrite = { groupId: number; unitId: string; judgedBy: string; confidence: number | null; rationale: string | null; jobId: string | null };
 export type KgWriteResult = { conceptId: number; created: boolean; edge: "kept" | "added" | "replaced"; retiredEdges: number };
 
 export async function writeGroupToKg(w: KgWrite): Promise<KgWriteResult> {

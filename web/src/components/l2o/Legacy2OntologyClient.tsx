@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Pin } from "lucide-react";
 import MathView from "@/components/MathView";
 import GroupEditDialog from "@/components/l2o/GroupEditDialog";
 import JobProgress from "@/components/l2o/JobProgress";
@@ -226,6 +227,14 @@ export default function Legacy2OntologyClient({
       await post(`confirm:${groupId}`, "/api/l2o/dedupe/confirm", { groupId })
     )
       setNotice(`그룹 ${groupId}: 묶음이 맞다고 확인했습니다.`);
+  };
+  // 검토 필요: 핀 클릭 → 제안 단원으로 바로 결정(사유 없이, 즉시 KG 반영)
+  const pinSuggested = async (groupId: number, unitId: string, unitPath: string) => {
+    const d = await post(`pin:${groupId}`, "/api/l2o/override", { groupId, unitId });
+    if (d)
+      setNotice(
+        `그룹 ${groupId}: ${unitPath} 로 결정 · KG ${d.kg.created ? "개념 생성" : "개념 갱신"} / 엣지 ${d.kg.edge}${d.kg.retiredEdges ? ` (비활성 ${d.kg.retiredEdges})` : ""}`,
+      );
   };
   // 페이지 버튼이 한 줄에 안 들어가면 현재±2 → ±1 → ±0 으로 줄인다
   const pagRef = useRef<HTMLDivElement>(null);
@@ -546,6 +555,8 @@ export default function Legacy2OntologyClient({
                   }
                   onHistory={setHistoryGroup}
                   onConfirmBundle={confirmBundle}
+                  onPinSuggested={pinSuggested}
+                  pinning={busy === `pin:${row.group?.id}`}
                 />
               </div>,
             ];
@@ -825,6 +836,8 @@ function RightResultCell({
   onDecide,
   onHistory,
   onConfirmBundle,
+  onPinSuggested,
+  pinning,
 }: {
   row: RowVM;
   onFocus: (id: number) => void;
@@ -835,6 +848,8 @@ function RightResultCell({
   onDecide: (groupId: number) => void;
   onHistory: (groupId: number) => void;
   onConfirmBundle: (groupId: number) => void;
+  onPinSuggested: (groupId: number, unitId: string, unitPath: string) => void;
+  pinning: boolean;
 }) {
   if (!row.legacy.isOn)
     return (
@@ -857,8 +872,20 @@ function RightResultCell({
       최종: {r.finalUnitPath ?? r.finalUnitId}
     </span>
   ) : r?.suggestedUnitId ? (
-    <span className="text-amber-200">
+    <span className="text-amber-200 inline-flex items-center gap-1">
       제안: {r.suggestedUnitPath ?? r.suggestedUnitId}
+      {g.isRepresentative && r.status === "needs_review" && (
+        <button
+          onClick={() =>
+            onPinSuggested(g.id, r.suggestedUnitId!, r.suggestedUnitPath ?? r.suggestedUnitId!)
+          }
+          disabled={running || locked || pinning}
+          title="제안 단원으로 결정 (즉시 KG 반영)"
+          className="p-0.5 rounded text-amber-300 hover:bg-amber-500/20 hover:text-amber-100 disabled:opacity-40"
+        >
+          <Pin size={12} />
+        </button>
+      )}
     </span>
   ) : null;
 

@@ -39,7 +39,7 @@ export async function candidatesFor(groupId: number) {
   };
 }
 
-export async function overrideUnit(groupId: number, unitId: string, reason: string, actor: string) {
+export async function overrideUnit(groupId: number, unitId: string, reason: string | null, actor: string) {
   const units = await listUnits();
   if (!units.some((u) => u.unitId === unitId)) throw new OverrideError(`없는 단원입니다: ${unitId}`);
   const g = await pool.query(
