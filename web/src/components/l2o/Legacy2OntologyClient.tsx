@@ -76,6 +76,16 @@ export default function Legacy2OntologyClient({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  };
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
   const [editGroup, setEditGroup] = useState<number | null>(null);
   const [mergeRep, setMergeRep] = useState<number | null>(null);
 
@@ -232,7 +242,7 @@ export default function Legacy2OntologyClient({
   const pinSuggested = async (groupId: number, unitId: string, unitPath: string) => {
     const d = await post(`pin:${groupId}`, "/api/l2o/override", { groupId, unitId });
     if (d)
-      setNotice(
+      showToast(
         `그룹 ${groupId}: ${unitPath} 로 결정 · KG ${d.kg.created ? "개념 생성" : "개념 갱신"} / 엣지 ${d.kg.edge}${d.kg.retiredEdges ? ` (비활성 ${d.kg.retiredEdges})` : ""}`,
       );
   };
@@ -369,10 +379,19 @@ export default function Legacy2OntologyClient({
           onClose={() => setDecide(null)}
           onDone={(msg) => {
             setDecide(null);
-            setNotice(msg);
+            showToast(msg);
             router.refresh();
           }}
         />
+      )}
+      {toast && (
+        <div
+          role="status"
+          onClick={() => setToast(null)}
+          className="fixed top-16 right-6 z-50 max-w-md rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl cursor-pointer animate-in fade-in slide-in-from-top-3 duration-200"
+        >
+          {toast}
+        </div>
       )}
       {historyGroup != null && (
         <HistoryDialog
@@ -779,8 +798,16 @@ function StatusBadge({ result }: { result: NonNullable<RowVM["result"]> }) {
   );
 }
 
-// 3표 칩: 단원 경로 축약 · confidence %, 오류면 빨강 + 툴팁
-function VoteChips({ votes }: { votes: RowVM["votes"] }) {
+// 3표 칩: 단원 경로 축약 · confidence %, 오류면 빨강 + 툴팁, 검토 필요 시 핀 클릭으로 해당 모델 제안 단원 확정
+function VoteChips({
+  votes,
+  onPin,
+  disabled,
+}: {
+  votes: RowVM["votes"];
+  onPin?: (unitId: string, unitPath: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex gap-1 flex-wrap">
       {SELECTORS.map((s) => {
@@ -804,19 +831,34 @@ function VoteChips({ votes }: { votes: RowVM["votes"] }) {
               {SELECTOR_LABEL[s]} ⚠ 오류
             </span>
           );
+        const unitId = v.unitId;
+        const unitPath = v.unitPath ?? v.unitId ?? "";
         return (
           <span
             key={s}
             title={v.unitPath ?? v.unitId ?? "판단 불가"}
-            className="px-1.5 py-px rounded border border-white/10 text-[10px] text-gray-200"
+            className="px-1.5 py-px rounded border border-white/10 text-[10px] text-gray-200 inline-flex items-center gap-1"
           >
-            {SELECTOR_LABEL[s]} ·{" "}
-            {v.unitId ? shortPath(v.unitPath) || v.unitId : "판단 불가"}
-            {v.confidence != null && (
-              <span className="text-gray-500">
-                {" "}
-                {Math.round(v.confidence * 100)}%
-              </span>
+            <span>
+              {SELECTOR_LABEL[s]} ·{" "}
+              {unitId ? shortPath(v.unitPath) || unitId : "판단 불가"}
+              {v.confidence != null && (
+                <span className="text-gray-500">
+                  {" "}
+                  {Math.round(v.confidence * 100)}%
+                </span>
+              )}
+            </span>
+            {onPin && unitId && (
+              <button
+                type="button"
+                onClick={() => onPin(unitId, unitPath)}
+                disabled={disabled}
+                title={`${SELECTOR_LABEL[s]} 제안 단원(${unitPath})으로 확정 (즉시 KG 반영)`}
+                className="p-0.5 rounded text-amber-300 hover:bg-amber-500/20 hover:text-amber-100 disabled:opacity-40"
+              >
+                <Pin size={11} />
+              </button>
             )}
           </span>
         );
@@ -933,7 +975,17 @@ function RightResultCell({
         )}
         {g.status === "confirmed" && <Chip>확정</Chip>}
       </div>
-      {!pending && <VoteChips votes={row.votes} />}
+      {!pending && (
+        <VoteChips
+          votes={row.votes}
+          onPin={
+            g.isRepresentative && r.status === "needs_review"
+              ? (unitId, unitPath) => onPinSuggested(g.id, unitId, unitPath)
+              : undefined
+          }
+          disabled={running || locked || pinning}
+        />
+      )}
       {unitLine && <div>{unitLine}</div>}
       <div className="flex items-center gap-1.5 flex-wrap">
         {pending ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Pin } from "lucide-react";
 import { api } from "@/lib/api";
 import { SELECTORS, type SelectorName } from "@/lib/l2o/types";
 
@@ -9,7 +10,101 @@ type Cands = { status: string; currentUnitId: string | null; suggestedUnitId: st
 type Vote = { selector: SelectorName; unitId: string | null; unitPath: string | null; confidence: number | null; error: string | null; reason: string | null };
 const LABEL: Record<SelectorName, string> = { jev: "JEV", claude: "Claude", gemini: "Gemini" };
 
-// 단원 결정/수정 창 (스펙 5.5·9): 3표와 이유, 후보(제안 단원 미리 선택), 전체 단원 검색, 사유 → 확정 시 즉시 KG 반영
+const SUBJECT_ORDER = [
+  "중1",
+  "중2",
+  "중3",
+  "공통 수학1",
+  "공통 수학2",
+  "대수",
+  "미적분Ⅰ",
+  "확률과 통계",
+  "미적분Ⅱ",
+  "기하",
+];
+
+type TreeUnit = {
+  unitId: string;
+  path: string;
+  unitName: string;
+  areaName?: string;
+};
+
+type SubjectNode = {
+  key: string;
+  name: string;
+  units: TreeUnit[];
+};
+
+type SchoolNode = {
+  key: "MID" | "HIGH";
+  name: string;
+  subjects: SubjectNode[];
+};
+
+function buildUnitTree(all: Unit[], query: string): SchoolNode[] {
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? all.filter((u) => u.path.toLowerCase().includes(q) || u.unitId.toLowerCase().includes(q))
+    : all;
+
+  const midMap = new Map<string, TreeUnit[]>();
+  const highMap = new Map<string, TreeUnit[]>();
+
+  for (const u of filtered) {
+    const parts = u.path.split(" > ");
+    const isHigh = u.unitId.startsWith("L4-H") || parts[0] === "고등";
+    if (isHigh) {
+      const subject = parts[1] ?? "기타";
+      const unitName = parts[2] ?? parts[parts.length - 1] ?? u.path;
+      const list = highMap.get(subject) ?? [];
+      list.push({ unitId: u.unitId, path: u.path, unitName });
+      highMap.set(subject, list);
+    } else {
+      const subject = parts[0] ?? "중등";
+      const areaName = parts.length >= 3 ? parts[1] : undefined;
+      const unitName = parts[parts.length - 1] ?? u.path;
+      const list = midMap.get(subject) ?? [];
+      list.push({ unitId: u.unitId, path: u.path, unitName, areaName });
+      midMap.set(subject, list);
+    }
+  }
+
+  const sortSubjects = (entries: [string, TreeUnit[]][], prefix: string): SubjectNode[] =>
+    entries
+      .sort(([a], [b]) => {
+        const ia = SUBJECT_ORDER.indexOf(a);
+        const ib = SUBJECT_ORDER.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return a.localeCompare(b, "ko");
+      })
+      .map(([name, units]) => ({
+        key: `${prefix}:${name}`,
+        name: name === "중1" ? "중학 수학 1 (중1)" : name === "중2" ? "중학 수학 2 (중2)" : name === "중3" ? "중학 수학 3 (중3)" : name,
+        units: [...units].sort((a, b) => a.unitId.localeCompare(b.unitId)),
+      }));
+
+  const schools: SchoolNode[] = [];
+  if (midMap.size > 0) {
+    schools.push({
+      key: "MID",
+      name: "중학교 과정",
+      subjects: sortSubjects([...midMap.entries()], "MID"),
+    });
+  }
+  if (highMap.size > 0) {
+    schools.push({
+      key: "HIGH",
+      name: "고등학교 과정",
+      subjects: sortSubjects([...highMap.entries()], "HIGH"),
+    });
+  }
+  return schools;
+}
+
+// 단원 결정/수정 창: 3표와 이유 + 전체 과목·단원 트리뷰(기본 펼침) + 단원명 오른쪽 핀 클릭 시 즉시 KG 확정
 export default function UnitDecisionDialog({
   groupId,
   title,
@@ -24,10 +119,10 @@ export default function UnitDecisionDialog({
   const [cands, setCands] = useState<Cands | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [picked, setPicked] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [savingUnitId, setSavingUnitId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let alive = true;
@@ -38,7 +133,6 @@ export default function UnitDecisionDialog({
         if (!a.ok) throw new Error(c.error ?? `HTTP ${a.status}`);
         if (!alive) return;
         setCands(c);
-        setPicked(c.currentUnitId ?? c.suggestedUnitId ?? null);
         // 선택기별 최신 표 1개씩
         const latest = new Map<string, Vote>();
         for (const v of (h.votes ?? []) as Vote[]) if (!latest.has(v.selector)) latest.set(v.selector, v);
@@ -50,110 +144,204 @@ export default function UnitDecisionDialog({
     };
   }, [groupId]);
 
-  const candIds = useMemo(() => new Set(cands?.candidates.map((c) => c.unitId)), [cands]);
-  const searched = useMemo(() => {
-    const t = q.trim();
-    if (!cands || !t) return [];
-    return cands.all.filter((u) => !candIds.has(u.unitId) && (u.path.includes(t) || u.unitId.toLowerCase().includes(t.toLowerCase()))).slice(0, 20);
-  }, [q, cands, candIds]);
-  const pathOf = (id: string | null) => (id ? (cands?.all.find((u) => u.unitId === id)?.path ?? id) : "-");
+  const tree = useMemo(() => (cands ? buildUnitTree(cands.all, q) : []), [cands, q]);
   const editing = !!cands?.currentUnitId;
 
-  const save = async () => {
-    if (!picked) return;
-    setSaving(true);
+  const toggleNode = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const confirmUnit = async (unitId: string, unitPath: string) => {
+    if (savingUnitId) return;
+    setSavingUnitId(unitId);
     setError(null);
     try {
       const r = await api("/api/l2o/override", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId, unitId: picked, reason }),
+        body: JSON.stringify({ groupId, unitId, reason }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
-      onDone(`그룹 ${groupId}: ${pathOf(picked)} 로 결정 · KG ${d.kg.created ? "개념 생성" : "개념 갱신"} / 엣지 ${d.kg.edge}${d.kg.retiredEdges ? ` (비활성 ${d.kg.retiredEdges})` : ""}`);
+      onDone(`그룹 ${groupId}: ${unitPath} 로 결정 · KG ${d.kg.created ? "개념 생성" : "개념 갱신"} / 엣지 ${d.kg.edge}${d.kg.retiredEdges ? ` (비활성 ${d.kg.retiredEdges})` : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setSaving(false);
+      setSavingUnitId(null);
     }
   };
 
-  const option = (u: Unit) => (
-    <label key={u.unitId} className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-white/5 ${picked === u.unitId ? "bg-orange-500/10" : ""}`}>
-      <input type="radio" name="unit" checked={picked === u.unitId} onChange={() => setPicked(u.unitId)} />
-      <span className="text-gray-100">{u.path}</span>
-      <span className="text-gray-500 text-[10px]">{u.unitId}</span>
-      {u.unitId === cands?.suggestedUnitId && <span className="text-[10px] text-amber-300">제안</span>}
-      {u.unitId === cands?.currentUnitId && <span className="text-[10px] text-emerald-300">현재</span>}
-      {votes.filter((v) => v.unitId === u.unitId).map((v) => (
-        <span key={v.selector} className="text-[10px] text-sky-300">
-          {LABEL[v.selector]}
-        </span>
-      ))}
-    </label>
-  );
-
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="glass bg-[#0f1420] rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
+      <div
+        className="glass bg-[#0f1420] rounded-2xl w-full max-w-4xl max-h-[88vh] flex flex-col p-5 gap-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between shrink-0">
           <h3 className="text-sm font-bold">
-            {editing ? "단원 수정" : "단원 결정"} · 그룹 {groupId} <span className="text-gray-400 font-normal">{title}</span>
+            {editing ? "단원 수정" : "단원 결정"} · 그룹 {groupId}{" "}
+            <span className="text-gray-400 font-normal">{title}</span>
           </h3>
           <button onClick={onClose} className="text-xs text-gray-400 hover:text-white">
             닫기
           </button>
         </div>
-        {error && <p className="text-[11px] text-red-300">{error}</p>}
+
+        {error && <p className="text-[11px] text-red-300 shrink-0">{error}</p>}
         {!cands && !error && <p className="text-[11px] text-gray-400">불러오는 중…</p>}
+
         {cands && (
           <>
-            <div className="flex flex-col gap-1 text-[11px]">
+            {/* 3개 선택기 투표 요약 */}
+            <div className="flex flex-col gap-1 text-[11px] shrink-0 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
               {votes.length === 0 && <p className="text-gray-500">선택기 표가 아직 없습니다.</p>}
               {votes.map((v) => (
                 <p key={v.selector} className="text-gray-300">
                   <b className="text-gray-100">{LABEL[v.selector]}</b> ·{" "}
-                  {v.error ? <span className="text-red-300">오류: {v.error.slice(0, 120)}</span> : (v.unitPath ?? "판단 불가")}
-                  {v.confidence != null && !v.error && <span className="text-gray-500"> {Math.round(v.confidence * 100)}%</span>}
+                  {v.error ? (
+                    <span className="text-red-300">오류: {v.error.slice(0, 120)}</span>
+                  ) : (
+                    (v.unitPath ?? "판단 불가")
+                  )}
+                  {v.confidence != null && !v.error && (
+                    <span className="text-gray-500"> {Math.round(v.confidence * 100)}%</span>
+                  )}
                   {v.reason && <span className="text-gray-400"> — {v.reason}</span>}
                 </p>
               ))}
             </div>
-            <div className="text-[12px] flex flex-col">
-              <p className="text-[11px] text-gray-500 mb-1">후보 {cands.candidates.length}개</p>
-              {cands.candidates.map(option)}
-            </div>
-            <div className="text-[12px] flex flex-col gap-1">
+
+            {/* 검색 및 사유 입력 바 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 shrink-0">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="후보에 없으면 전체 단원 검색 (예: 수열, L4-HALG)"
-                className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-gray-100 outline-none focus:border-orange-400"
+                placeholder="과목·단원 필터 (예: 수열, 미적분, L4-HALG)"
+                className="rounded border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-orange-400"
               />
-              {searched.map(option)}
-              {q.trim() && !searched.length && <p className="text-[11px] text-gray-500">후보 밖에서 찾은 단원이 없습니다.</p>}
-            </div>
-            <label className="text-[11px] text-gray-400 flex flex-col gap-1">
-              사유 (선택)
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="예: 등비수열의 합이라 '수열의 합' 단원"
-                className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-gray-100 outline-none focus:border-orange-400"
+                placeholder="결정 사유 (선택 입력 후 단원 핀 클릭)"
+                className="rounded border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-orange-400"
               />
-            </label>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-gray-400">
-                선택: <span className="text-gray-100">{pathOf(picked)}</span>
-              </span>
-              <button
-                onClick={save}
-                disabled={!picked || saving || picked === cands.currentUnitId}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white disabled:opacity-40"
-              >
-                {saving ? "기록 중…" : "확정 (KG 반영)"}
-              </button>
+            </div>
+
+            {/* 전체 과목 · 단원 트리뷰 (기본 전체 펼침) */}
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
+              {tree.length === 0 ? (
+                <p className="text-xs text-gray-500 p-4 text-center">일치하는 과목·단원이 없습니다.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  {tree.map((school) => {
+                    const schoolOpen = !collapsed.has(school.key);
+                    return (
+                      <div key={school.key} className="flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleNode(school.key)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-orange-300 hover:text-orange-200 py-1 px-1.5 rounded hover:bg-white/5 text-left"
+                        >
+                          {schoolOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          <span>{school.name}</span>
+                        </button>
+
+                        {schoolOpen && (
+                          <div className="flex flex-col gap-2 pl-2 border-l border-white/10 ml-2">
+                            {school.subjects.map((subj) => {
+                              const subjOpen = !collapsed.has(subj.key);
+                              return (
+                                <div key={subj.key} className="flex flex-col gap-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleNode(subj.key)}
+                                    className="flex items-center gap-1 text-xs font-semibold text-gray-200 hover:text-white py-0.5 px-1.5 rounded hover:bg-white/5 text-left"
+                                  >
+                                    {subjOpen ? (
+                                      <ChevronDown size={13} className="text-gray-400 shrink-0" />
+                                    ) : (
+                                      <ChevronRight size={13} className="text-gray-400 shrink-0" />
+                                    )}
+                                    <span>{subj.name}</span>
+                                    <span className="text-[10px] text-gray-500 font-normal ml-1">
+                                      ({subj.units.length})
+                                    </span>
+                                  </button>
+
+                                  {subjOpen && (
+                                    <div className="flex flex-col gap-0.5 pl-3 border-l border-white/10 ml-2">
+                                      {subj.units.map((u) => {
+                                        const isSuggested = u.unitId === cands.suggestedUnitId;
+                                        const isCurrent = u.unitId === cands.currentUnitId;
+                                        const unitVotes = votes.filter((v) => v.unitId === u.unitId);
+                                        const isSaving = savingUnitId === u.unitId;
+                                        return (
+                                          <div
+                                            key={u.unitId}
+                                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors hover:bg-white/10 ${
+                                              isCurrent
+                                                ? "bg-emerald-500/15 border border-emerald-500/30"
+                                                : isSuggested
+                                                  ? "bg-amber-500/15 border border-amber-500/30"
+                                                  : unitVotes.length > 0
+                                                    ? "bg-sky-500/10 border border-sky-500/20"
+                                                    : ""
+                                            }`}
+                                          >
+                                            <span className="text-gray-100">{u.unitName}</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => confirmUnit(u.unitId, u.path)}
+                                              disabled={savingUnitId !== null}
+                                              title={`${u.path} 단원으로 확정 (즉시 KG 반영)`}
+                                              className="p-0.5 rounded text-amber-300 hover:bg-orange-500/25 hover:text-orange-200 disabled:opacity-40 shrink-0"
+                                            >
+                                              <Pin size={12} />
+                                            </button>
+                                            {u.areaName && (
+                                              <span className="text-[10px] text-gray-500">{u.areaName}</span>
+                                            )}
+                                            {isSaving && (
+                                              <span className="text-[10px] text-orange-300">기록 중…</span>
+                                            )}
+                                            {isSuggested && (
+                                              <span className="px-1 py-px rounded bg-amber-500/20 text-[10px] text-amber-300">
+                                                제안
+                                              </span>
+                                            )}
+                                            {isCurrent && (
+                                              <span className="px-1 py-px rounded bg-emerald-500/20 text-[10px] text-emerald-300">
+                                                현재
+                                              </span>
+                                            )}
+                                            {unitVotes.map((v) => (
+                                              <span
+                                                key={v.selector}
+                                                className="px-1 py-px rounded bg-sky-500/20 text-[10px] text-sky-300"
+                                              >
+                                                {LABEL[v.selector]}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </>
         )}
