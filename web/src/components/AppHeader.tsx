@@ -16,6 +16,7 @@ const NAV = [
   { href: "/quiz-viewer", label: "퀴즈 뷰어" },
   { href: "/aside", label: "Aside" },
   { href: "/legacy2ontology", label: "Legacy→KG" },
+  { href: "/utilities", label: "유틸리티" },
 ];
 
 export default function AppHeader({ subtitle }: { subtitle: string }) {

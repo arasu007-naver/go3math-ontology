@@ -37,7 +37,7 @@ type SubjectNode = {
 };
 
 type SchoolNode = {
-  key: "MID" | "HIGH";
+  key: "MID" | "HIGH" | "STUDY";
   name: string;
   subjects: SubjectNode[];
 };
@@ -50,9 +50,14 @@ function buildUnitTree(all: Unit[], query: string): SchoolNode[] {
 
   const midMap = new Map<string, TreeUnit[]>();
   const highMap = new Map<string, TreeUnit[]>();
+  const study: TreeUnit[] = [];
 
   for (const u of filtered) {
     const parts = u.path.split(" > ");
+    if (u.unitId.startsWith("L3-STUDY-")) {
+      study.push({ unitId: u.unitId, path: u.path, unitName: parts[parts.length - 1] ?? u.path });
+      continue;
+    }
     const isHigh = u.unitId.startsWith("L4-H") || parts[0] === "고등";
     if (isHigh) {
       const subject = parts[1] ?? "기타";
@@ -99,6 +104,14 @@ function buildUnitTree(all: Unit[], query: string): SchoolNode[] {
       key: "HIGH",
       name: "고등학교 과정",
       subjects: sortSubjects([...highMap.entries()], "HIGH"),
+    });
+  }
+  // 수학 외 항목(학습법·문제 해결 전략·평가·교육과정 설명 등)용
+  if (study.length > 0) {
+    schools.push({
+      key: "STUDY",
+      name: "수학 학습 (수학 외)",
+      subjects: [{ key: "STUDY:수학 학습", name: "수학 학습", units: study.sort((a, b) => a.unitId.localeCompare(b.unitId)) }],
     });
   }
   return schools;

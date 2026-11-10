@@ -3,7 +3,7 @@ import { pickCandidates, type Candidate, type Unit } from "@/lib/l2o/units";
 import { embedTexts } from "./embedding";
 import { pool } from "./l2oPool";
 
-// KG 2022 단원 (level 노드): 중학교 대단원 L3-MID-* + 고등 과목별 대단원 L4-H*. STUDY·TOC 는 제외.
+// KG 2022 단원 (level 노드): 중학교 대단원 L3-MID-* + 고등 과목별 대단원 L4-H* + 수학 학습 대단원 L3-STUDY-*(수동 결정 전용). TOC 는 제외.
 let unitsCache: Promise<Unit[]> | null = null;
 let vecCache: Promise<Map<string, number[]>> | null = null;
 
@@ -18,12 +18,14 @@ async function loadUnits(): Promise<Unit[]> {
        LEFT JOIN kg.nodes p ON p.id = pe.src
        LEFT JOIN kg.edges a ON a.src = n.id AND a.type = 'BELONGS_TO_AREA'
        LEFT JOIN kg.nodes an ON an.id = a.dst
-      WHERE n.type = 'level' AND n.props->>'category' = '대단원' AND (n.id LIKE 'L3-MID%' OR n.id LIKE 'L4-H%')
+      WHERE n.type = 'level' AND n.props->>'category' = '대단원' AND (n.id LIKE 'L3-MID%' OR n.id LIKE 'L4-H%' OR n.id LIKE 'L3-STUDY-%')
       GROUP BY n.id, n.props, p.props
       ORDER BY n.id`
   );
   return r.rows.map((x) => {
     const high = String(x.id).startsWith("L4-H");
+    if (String(x.id).startsWith("L3-STUDY-"))
+      return { unitId: x.id, path: `수학 학습 > ${x.name}`, school: "STUDY" as const, areas: x.areas };
     return {
       unitId: x.id,
       path: high ? `고등 > ${x.parent_name} > ${x.name}` : `중${x.grade ?? "?"} > ${x.area_names || "기타"} > ${x.name}`,
@@ -51,7 +53,7 @@ export async function unitPaths(): Promise<Map<string, string>> {
 
 function unitVectors(): Promise<Map<string, number[]>> {
   vecCache ??= retryable(async () => {
-    const units = await listUnits();
+    const units = (await listUnits()).filter((u) => u.school !== "STUDY");
     const vectors = await embedTexts(units.map((u) => u.path));
     return new Map(units.map((u, i) => [u.unitId, vectors[i]]));
   }, () => (vecCache = null));
@@ -67,5 +69,6 @@ export async function getCandidateUnits(concept: {
 }): Promise<{ candidates: Candidate[]; fallback: boolean }> {
   const [all, vec] = await Promise.all([listUnits(), unitVectors()]);
   const [cv] = await embedTexts([`${concept.title}\n${concept.statement}`]);
-  return pickCandidates(concept, all, (id) => cosine(cv, vec.get(id)!));
+  // 수학 학습 대단원은 사람이 결정 창에서만 고른다(선택기 후보·프롬프트는 그대로)
+  return pickCandidates(concept, all.filter((u) => u.school !== "STUDY"), (id) => cosine(cv, vec.get(id)!));
 }

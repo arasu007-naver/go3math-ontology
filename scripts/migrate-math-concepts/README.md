@@ -50,8 +50,9 @@ npm test               # DB·API 없이 도는 단위 테스트
 - **KG 대상 테이블**: 현행 `kg.nodes` 는 type 이 CHECK 로 고정이고 `kg.edges` 에 속성 열이 없어, 개념·엣지를 전용 테이블로 둔다 → [`ddl/001-concept-tables.sql`](ddl/001-concept-tables.sql) (**초안, 승인 후 적용**). 단원은 기존 `kg.nodes.id` 를 참조.
 - **기존 단원 힌트**: `math_concepts.chapter_id` 가 없으면 `math_concept_chapters`(N:M)에서 읽는다. 프롬프트에 "참고"로만 준다.
 - **성취기준**: KG 노드 `props.achievementStandards` 가 있으면 쓰고, 없으면 `ACHIEVEMENT_FILE`(`{"<unit_id>": [{"code": "...", "text": "..."}]}`)에서 읽는다. 둘 다 없으면 성취기준 엣지는 비어 있다.
+- **수학 외 항목 (2026-11-10 결정)**: 학습법·문제 해결 전략·평가/교육과정 설명 같은 항목은 새 과목을 만들지 않고 KG 에 이미 있는 수학 학습 고정 대단원 `L3-STUDY-*` 넷(교육과정·학습법·문제 해결 전략·교습법)에 연결한다. 그래서 후보가 90개(수학 86 + 수학 학습 4)이고 `TOP_K=90`.
 - **후보 수 (2026-10-20 결정)**: KG 단원이 86개(대단원만)라 `TOP_K=86` 으로 모든 단원을 후보로 준다. 후보 블록은 unit_id 순으로 system 에 들어가 항목마다 같으므로 prompt caching 이 된다. 성취기준은 KG 에 없어 이번에는 쓰지 않는다.
 - **원본 데이터 특성**: 제목·본문의 HTML 태그는 판정·임베딩 전에 걷어낸다(백틱 안 수식은 그대로, KG 에는 raw 원문 기록). `school_type` 이 없는 일괄 등록 TERM 562개는 학년·분야가 기본값이라 필터에 쓰지 않고 프롬프트에도 "미상"으로 준다. 기존 단원 힌트는 `math_concept_chapters` 에서 읽는다(`chapter_id` 는 전부 NULL).
 - **학년 필터**: 개념 `curriculum_type` ↔ 단원 학년 ±1. 고등 과목 학년은 [`subject-grades.json`](subject-grades.json). 필터 통과 후보가 TOP_K 미만이면 필터를 푼다.
-- **모델**: 판정 `claude-sonnet-5-5`(effort `EFFORT`, 기본 medium, 구조화 출력), 교차검증 `gemini-2.5-pro`(thinking budget 2048), 임베딩 `gemini-embedding-001`(파일 캐시). API 키는 Anthropic·Gemini 둘만 쓴다(OpenAI 미사용). Batch API 대신 동시성 제한(`CONCURRENCY`) + 지수 백오프.
+- **모델**: 판정 `claude-sonnet-5-5`(effort `EFFORT`, 기본 medium, 구조화 출력), 교차검증 `gemini-3.1-pro-preview`(`GEMINI_MODEL`, thinking budget 2048; gemini-2.5-pro 는 신규 사용자에게 닫힘), 임베딩 `gemini-embedding-001`(파일 캐시). API 키는 Anthropic·Gemini 둘만 쓴다(OpenAI 미사용). Batch API 대신 동시성 제한(`CONCURRENCY`) + 지수 백오프.
 - **확장**: 판정 단위는 `item_id`/`item_type` 이라 문제 매핑도 같은 프롬프트·스키마로 붙일 수 있다(이번 범위 밖).

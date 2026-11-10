@@ -436,6 +436,11 @@ CREATE TABLE IF NOT EXISTS kg.book_index (
 ALTER TABLE kg.book_index ADD COLUMN IF NOT EXISTS chapter_title TEXT;
 CREATE INDEX IF NOT EXISTS idx_idx_book ON kg.book_index (book_stem);
 
+-- 색인 zip 업로드(/utilities): 각 항목의 index 키(색인명)로 kg.book_index 와 연결
+ALTER TABLE kg.dictionary ADD COLUMN IF NOT EXISTS book_index_id BIGINT REFERENCES kg.book_index(id) ON DELETE SET NULL;
+ALTER TABLE kg.flashcards ADD COLUMN IF NOT EXISTS book_index_id BIGINT REFERENCES kg.book_index(id) ON DELETE SET NULL;
+ALTER TABLE kg.quizzes    ADD COLUMN IF NOT EXISTS book_index_id BIGINT REFERENCES kg.book_index(id) ON DELETE SET NULL;
+
 -- ---------- 교재 PDF → Mathpix MD 전환 기록 (NotebookLM 이 못 읽는 PDF 를 MD 로 제공) ----------
 -- status: submitted(제출) → completed(MD 전환 완료) → saved(qoollastorage 의 S3_MD_PREFIX 아래 저장 완료) / failed
 CREATE TABLE IF NOT EXISTS kg.document_convert_log (

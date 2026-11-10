@@ -18,6 +18,7 @@
     "@anthropic-ai/sdk": "^0.131.0",
     "@aws-sdk/client-s3": "^3.1147.0",
     "cytoscape": "^3.34.3",
+    "fflate": "^0.8.3",
     "katex": "^0.19.0",
     "lucide-react": "^1.52.0",
     "mysql2": "^3.24.6",

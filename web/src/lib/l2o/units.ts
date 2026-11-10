@@ -6,7 +6,7 @@ export type Unit = {
   unitId: string;
   path: string; // "중1 > 기하 > 작도와 합동"
   description?: string;
-  school: "MIDDLESCHOOL" | "HIGHSCHOOL";
+  school: "MIDDLESCHOOL" | "HIGHSCHOOL" | "STUDY"; // STUDY: 수학 학습 대단원(L3-STUDY-*), 수학 외 항목용
   areas: string[]; // KG L1 영역 id (BELONGS_TO_AREA)
 };
 

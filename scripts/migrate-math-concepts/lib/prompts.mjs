@@ -28,12 +28,13 @@ export const JUDGE_SYSTEM = `당신은 한국 2022 개정 교육과정 수학 �
 2. secondary_unit_ids 에는 그 개념이 의미 있게 다시 쓰이거나 확장되는 다른 후보 단원만 넣습니다(primary 제외, 없으면 빈 배열).
 3. achievement_codes 에는 후보 단원에 적힌 성취기준 코드 중 이 개념에 해당하는 것만 넣습니다. 성취기준이 주어지지 않았으면 빈 배열입니다.
 4. prerequisite_concept_ids 에는 '선수 개념 후보' 목록의 id 중 이 개념을 이해하는 데 직접 필요한 것만 넣습니다. 목록이 없으면 빈 배열입니다.
-5. 알맞은 후보가 없으면(예: 2022 개정 교육과정 범위 밖, 후보 모두 무관) primary_unit_id 는 null, secondary_unit_ids 는 빈 배열, confidence 는 0 입니다.
-6. '기존 단원(참고)'은 구 교육과정 단원일 수 있는 힌트일 뿐 정답이 아닙니다.
-7. 본문의 수식은 원문 표기(백틱 AsciiMath 또는 $ LaTeX)를 그대로 읽으세요.
-8. item_id, item_type 은 입력값을 그대로 씁니다.
-9. rationale 은 한국어 2문장 이내로, 왜 그 단원인지 씁니다.
-10. confidence 는 0~1 사이로, primary_unit_id 가 정답일 확률에 대한 솔직한 추정입니다.
+5. 수학 내용이 아닌 항목(학습법·공부 요령, 문제 해결 전략, 평가·수능·논술·교육과정 설명, 교습법)은 영역이 '수학 학습'인 후보 단원(unit_id L3-STUDY-*) 중 알맞은 곳을 primary 로 고르세요. 수학 내용 항목은 수학 학습 쪽에 연결하지 않습니다.
+6. 알맞은 후보가 없으면(예: 2022 개정 교육과정 범위 밖의 수학 내용, 후보 모두 무관) primary_unit_id 는 null, secondary_unit_ids 는 빈 배열, confidence 는 0 입니다.
+7. '기존 단원(참고)'은 구 교육과정 단원일 수 있는 힌트일 뿐 정답이 아닙니다.
+8. 본문의 수식은 원문 표기(백틱 AsciiMath 또는 $ LaTeX)를 그대로 읽으세요.
+9. item_id, item_type 은 입력값을 그대로 씁니다.
+10. rationale 은 한국어 2문장 이내로, 왜 그 단원인지 씁니다.
+11. confidence 는 0~1 사이로, primary_unit_id 가 정답일 확률에 대한 솔직한 추정입니다.
 
 출력은 다음 형태의 JSON 객체 하나만 씁니다(다른 글 없이):
 {"item_id": "...", "item_type": "concept", "primary_unit_id": "..." 또는 null, "secondary_unit_ids": [], "achievement_codes": [], "prerequisite_concept_ids": [], "rationale": "...", "confidence": 0.0}`;

@@ -1,5 +1,5 @@
 // Knowledge Graph DB (PostgreSQL, 스키마 kg — web/db/schema.sql).
-// 22개정 단원 = level 노드 중 category 대단원·소단원 (수학 학습 쪽 L3-STUDY-* 아래는 제외, 교재 TOC 노드도 제외).
+// 22개정 단원 = level 노드 중 category 대단원·소단원 + 수학 학습 쪽 고정 대단원 L3-STUDY-* (그 아래·교재 TOC 노드는 제외).
 //   중등: L2-*-PRE > L3 대단원(grade 1~3) > L4 소단원
 //   고등: L2-*-PRE > L3 과목 > L4 대단원 > L5 소단원
 import fs from "node:fs";
@@ -45,7 +45,8 @@ export async function loadUnits(pgc) {
   const units = [];
   for (const n of nodes) {
     const cat = n.props.category;
-    if (n.study || !(cat === "대단원" || cat === "소단원")) continue;
+    // 수학 학습 쪽은 고정 대단원 L3-STUDY-* 넷만 후보로 쓴다(수학 외 항목용). 그 아래 교재 TOC 는 제외
+    if ((n.study && !n.id.startsWith("L3-STUDY-")) || !(cat === "대단원" || cat === "소단원")) continue;
     const chain = []; // 자신 → 과목/중등 대단원
     for (let id = n.id; id && byId.get(id)?.props.category; id = parent.get(id)) chain.push(byId.get(id));
     const names = chain.map((x) => x.props.name).reverse();
@@ -55,7 +56,8 @@ export async function loadUnits(pgc) {
       else if (x.props.category === "과목") grade = subjectGrade(x.props.name);
       if (grade != null) break;
     }
-    const areas = chain.map((x) => area.get(x.id)).find((a) => a?.length) ?? [];
+    // 수학 학습 대단원은 영역 간선이 없어 L1-STUDY 로 표시한다
+    const areas = chain.map((x) => area.get(x.id)).find((a) => a?.length) ?? (n.study ? ["L1-STUDY"] : []);
     units.push({
       id: n.id,
       name: n.props.name,

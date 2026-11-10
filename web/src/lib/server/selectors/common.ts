@@ -73,12 +73,12 @@ export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function postJson(url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
+export async function postJson(url: string, headers: Record<string, string>, body: unknown, timeoutMs = TIMEOUT_MS): Promise<unknown> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const ra = Number(res.headers.get("retry-after"));
