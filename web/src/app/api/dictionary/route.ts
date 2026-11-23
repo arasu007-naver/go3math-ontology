@@ -13,8 +13,11 @@ import {
   deleteQuiz,
   deleteBookIndex
 } from "@/lib/dictionaryDb";
+import { requireSession } from "@/lib/server/auth";
 
 export async function GET(req: Request) {
+  const s = await requireSession();
+  if (s instanceof Response) return s;
   try {
     const url = new URL(req.url);
     const bookStem = url.searchParams.get("bookStem") || undefined;
@@ -43,6 +46,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const s = await requireSession();
+  if (s instanceof Response) return s;
   try {
     const body = await req.json();
     const { dictionary = [], flashcards = [], quizzes = [], bookIndex = [] } = body;
@@ -71,6 +76,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const s = await requireSession();
+  if (s instanceof Response) return s;
   try {
     const body = await req.json();
     const { type, id, bookStem, term, front, question } = body;

@@ -14,8 +14,12 @@ import {
   saveBookIndex
 } from "@/lib/dictionaryDb";
 import type { FlashcardItem, QuizItem, BookIndexItem, DictionaryItem } from "@/lib/types";
+import { requireSession } from "@/lib/server/auth";
+import { isSafeBookStem } from "@/lib/server/requestGuards";
 
 export async function POST(req: Request) {
+  const s = await requireSession();
+  if (s instanceof Response) return s;
   try {
     const body = await req.json();
     const {
@@ -31,6 +35,10 @@ export async function POST(req: Request) {
 
     if (!bookStem) {
       return NextResponse.json({ error: "bookStem이 필요합니다." }, { status: 400 });
+    }
+    // bookStem 은 서버 폴더 경로에 들어간다
+    if (!isSafeBookStem(bookStem)) {
+      return NextResponse.json({ error: "유효하지 않은 bookStem입니다." }, { status: 400 });
     }
 
     // 1) NotebookLM 프롬프트 생성 액션

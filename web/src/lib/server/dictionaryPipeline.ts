@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { DictionaryItem, FlashcardItem, QuizItem, BookIndexItem, QuizOption } from "../types";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AQ.Ab8RN6I_16X61JkqZh5BcXWUjLNlSZuzQMoRzKr7lKYPzLF8Zw";
 const OCR_SERVER_URL = process.env.OCR_SERVER_URL || "http://localhost:8088";
 
 // ── S3 / 로컬 페이지 텍스트 로드 ──
@@ -58,7 +57,9 @@ export async function loadPageTextsForRange(
 
 // ── Gemini JSON API 호출 헬퍼 ──
 async function callGeminiJson<T>(prompt: string, contextText: string, schema: Record<string, unknown>): Promise<T | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY 가 설정되지 않았습니다.");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
   
   const body = {
     contents: [

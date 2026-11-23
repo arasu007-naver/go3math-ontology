@@ -509,12 +509,16 @@ export async function deleteTocUnitLink(id: number) {
 
 export const TABLE_PAGE_SIZE = 24;
 
-// DB 의 모든 일반 테이블 ('스키마.테이블')
+// 이 앱이 소유한 스키마만 화면에 보여 준다 (같은 DB 의 다른 서비스 데이터는 제외)
+const VIEWABLE_SCHEMAS = ["kg", "l2o"];
+
+// 볼 수 있는 일반 테이블 ('스키마.테이블')
 export async function listTables(): Promise<string[]> {
   const rows = await q<{ name: string }>(
     `SELECT table_schema || '.' || table_name AS name FROM information_schema.tables
-     WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema')
-     ORDER BY table_schema, table_name`
+     WHERE table_type = 'BASE TABLE' AND table_schema = ANY($1::text[])
+     ORDER BY table_schema, table_name`,
+    [VIEWABLE_SCHEMAS]
   );
   return rows.map((r) => r.name);
 }
