@@ -111,6 +111,8 @@
 - **serverConceptOrder**: `web/src/lib/server/conceptOrder.ts`
 - **auth**: `web/src/lib/server/auth.ts`
 - **session**: `web/src/lib/server/session.ts`
+- **requestGuards**: `web/src/lib/server/requestGuards.ts`
+- **remoteText**: `web/src/lib/server/remoteText.ts`
 - **API 라우트 루트**: `web/src/app/api`
 
 ## 유틸

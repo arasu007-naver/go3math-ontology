@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { requireSession } from "@/lib/server/auth";
+import { safeUploadName } from "@/lib/server/requestGuards";
 
 export async function POST(req: Request) {
+  const s = await requireSession();
+  if (s instanceof Response) return s;
   try {
     const formData = await req.formData();
     const file = formData.get("pdfFile") as File | null;
@@ -12,7 +16,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "PDF 파일이 전송되지 않았습니다." }, { status: 400 });
     }
 
-    const fileName = file.name;
+    const fileName = safeUploadName(file.name);
+    if (!fileName) {
+      return NextResponse.json({ error: "유효하지 않은 PDF 파일 이름입니다." }, { status: 400 });
+    }
     const stem = fileName.replace(/\.[^/.]+$/, "");
     const bookTitle = customTitle || stem;
 

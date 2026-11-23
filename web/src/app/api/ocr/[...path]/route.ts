@@ -1,4 +1,5 @@
 import { requireSession } from "@/lib/server/auth";
+import { isOcrPageJsonKey } from "@/lib/server/requestGuards";
 import { getText, listKeys } from "@/lib/server/s3";
 
 // 페이지 이미지 목록·추출 JSON 을 S3(MinIO)에서 직접 읽는다. 응답 형태는 unlimited-ocr 의 같은 이름 API 와 같다.
@@ -40,7 +41,7 @@ async function listJsonPages(params: URLSearchParams) {
 
 async function getJson(params: URLSearchParams) {
   const key = (params.get("key") || "").replaceAll("\\", "/").trim();
-  if (!key.endsWith(".json")) return Response.json({ error: "Invalid key format" }, { status: 400 });
+  if (!isOcrPageJsonKey(key)) return Response.json({ error: "Invalid key format" }, { status: 400 });
   const text = await getText(key);
   if (text === null) return Response.json({ error: `S3 Key ${key} not found` }, { status: 404 });
   return new Response(text, { headers: { "Content-Type": "application/json" } });

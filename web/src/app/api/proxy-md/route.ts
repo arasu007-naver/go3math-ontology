@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/server/auth";
+import { fetchRemoteText, RemoteTextError } from "@/lib/server/remoteText";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -15,26 +16,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const parsed = new URL(targetUrl);
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return NextResponse.json({ error: "유효하지 않은 URL 프로토콜입니다." }, { status: 400 });
-    }
-
-    const response = await fetch(targetUrl, {
-      headers: {
-        "User-Agent": "Go3Math-MDViewer/1.0",
-        Accept: "text/markdown, text/plain, application/json, text/html, */*",
-      },
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `원격 파일 로드 실패 (HTTP ${response.status} ${response.statusText})` },
-        { status: response.status }
-      );
-    }
-
-    const text = await response.text();
+    const text = await fetchRemoteText(targetUrl);
     return new NextResponse(text, {
       status: 200,
       headers: {
@@ -43,7 +25,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "원격 파일을 가져오는 중 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (err instanceof RemoteTextError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    // 내부 연결 오류 내용은 브라우저에 돌려주지 않는다
+    console.warn(`[proxy-md] 조회 실패: ${err instanceof Error ? err.message : String(err)}`);
+    return NextResponse.json({ error: "원격 파일을 가져오는 중 오류가 발생했습니다." }, { status: 502 });
   }
 }
