@@ -2,7 +2,7 @@
 import { DEFAULT_CONFIG } from "./config.ts";
 import { preprocess, type RawProblem } from "./preprocess.ts";
 import { ZERO_USAGE, type ConceptOption, type ModelName, type UnitOption } from "./types.ts";
-import type { ModelAdapter, ModelRequest, ModelResult } from "./adapters/types.ts";
+import type { Answer, ModelAdapter, ModelRequest, ModelResult } from "./adapters/types.ts";
 import type { KgSource, NewCall, PipelineDeps, PipelineStore, ResultRow, StoredCall } from "../server/e2cPipeline.ts";
 import type { PrecedenceGraph } from "./precedence.ts";
 
@@ -62,10 +62,10 @@ export function scripted(name: ModelName, script: Script): ModelAdapter & { call
       if (s.error) return { ok: false, error: s.error, raw: null, usage: ZERO_USAGE, latencyMs: 1, model: `${name}-test` };
       const confidence = s.confidence ?? 0.9;
       const ids = req.options.map((o) => o.id);
-      const answer =
+      const answer: Answer =
         req.stage === "unit" || req.stage === "grok_unit"
-          ? ({ kind: "unit", unitIds: s.unit ?? [ids[0]], confidence, evidenceSteps: ["S1"] } as const)
-          : ({ kind: "concept", primary: s.primary ?? ids[0], secondary: s.secondary ?? [], confidence, evidenceSteps: [] } as const);
+          ? { kind: "unit", unitIds: s.unit ?? [ids[0]], confidence, evidenceSteps: ["S1"] }
+          : { kind: "concept", primary: s.primary ?? ids[0], secondary: s.secondary ?? [], confidence, evidenceSteps: [] };
       return { ok: true, answer, raw: { stub: true }, usage: { inputTokens: 1000, outputTokens: 50, cachedInputTokens: 0, cacheWriteTokens: 0, costUsd: name === "grok" ? 0.01 : null }, latencyMs: 1, model: `${name}-test` };
     },
   };
@@ -85,4 +85,36 @@ export function makeDeps(adapters: Record<ModelName, ModelAdapter>, store = new 
       return texts.map((t, i) => [t.length, i, 1]);
     },
   };
+}
+
+import type { JobKind, JobRow, JobScope, JobStore } from "../server/e2cJobs.ts";
+export class MemJobStore implements JobStore {
+  jobs = new Map<string, JobRow>();
+  n = 0;
+  order: number[];
+  cachedCalls: number;
+  constructor(order: number[] = [], cachedCalls = 0) {
+    this.order = order;
+    this.cachedCalls = cachedCalls;
+  }
+  async get(id: string) {
+    return this.jobs.get(id) ?? null;
+  }
+  async patch(id: string, patch: Partial<JobRow>) {
+    this.jobs.set(id, { ...this.jobs.get(id)!, ...patch });
+  }
+  async create(row: Omit<JobRow, "id">) {
+    const j = { ...row, id: `job${++this.n}` } as JobRow;
+    this.jobs.set(j.id, j);
+    return j;
+  }
+  async findBusy() {
+    return [...this.jobs.values()].find((j) => j.status === "running") ?? null;
+  }
+  async resolveScope(_k: JobKind, s: JobScope) {
+    return "ids" in s ? s.ids : this.order;
+  }
+  async estimateInputs() {
+    return { cachedCalls: this.cachedCalls, avgChars: 1500 };
+  }
 }

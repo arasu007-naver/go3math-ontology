@@ -252,7 +252,7 @@ export default function GraphExplorer() {
     // 4) 영역(L1) 필터 적용
     if (areaFilter) {
       for (const id of [...shownIds]) {
-        const a = areaMap.get(id) ?? (id === areaFilter ? areaFilter : null);
+        const a: string | null = areaMap.get(id) ?? (id === areaFilter ? areaFilter : null);
         if (a !== areaFilter && !forceVisibleIds.has(id)) {
           shownIds.delete(id);
         }

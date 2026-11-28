@@ -42,7 +42,7 @@ export function stripHtml(html: string | null): string {
 }
 
 // 본문의 <img hwp-img-id="X"> → {IMG_BASE}/{img_path}/X.jpg
-function imagesOf(html: string | null, imgPath: string | null): string[] {
+export function imagesOf(html: string | null, imgPath: string | null): string[] {
   if (!html || !imgPath) return [];
   const ids = [...html.matchAll(/hwp-img-id=\\?"([^"\\]+)/g)].map((m) => m[1]);
   return [...new Set(ids)].map((id) => `${IMG_BASE}/${imgPath}/${id}.jpg`);

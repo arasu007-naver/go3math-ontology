@@ -170,3 +170,16 @@ test("해시 멱등: 같은 입력 같은 해시, 프롬프트 버전이 바뀌�
   assert.equal(callHash(a), callHash({ ...a, options: [...a.options].reverse() }));
   assert.notEqual(callHash(a), callHash({ ...a, promptVersion: "e2c-unit-v3" }));
 });
+
+import { pilotSample, processingOrder } from "./pilot.ts";
+test("파일럿 선정: 결정적, 100~200개, 과목·연도·난이도가 섞인다", () => {
+  const items = Array.from({ length: 2000 }, (_, i) => ({ id: i + 1, subject: ["COMMON", "CALCULUS", "GEOMETRY", "STATISTICS"][i % 4], year: 2015 + (i % 9), difficulty: (i % 5) + 1 }));
+  const a = pilotSample(items, 150);
+  assert.deepEqual(a, pilotSample(items, 150));
+  assert.equal(a.length, 150);
+  const set = new Set(a);
+  const subs = new Set(items.filter((x) => set.has(x.id)).map((x) => x.subject));
+  assert.equal(subs.size, 4);
+  assert.equal(pilotSample(items, 10).length, 100);
+  assert.deepEqual(processingOrder([{ id: 3, subject: "B" }, { id: 1, subject: "B" }, { id: 2, subject: "A" }]), [2, 1, 3]);
+});
