@@ -1,6 +1,6 @@
 import type { ModelAdapter, ModelRequest, ModelResult } from "../e2c/adapters/types.ts";
 import { pickConceptOptions, pickUnitCandidates } from "../e2c/candidates.ts";
-import { PROMPT_VERSIONS, type E2cConfig } from "../e2c/config.ts";
+import type { E2cConfig } from "../e2c/config.ts";
 import { computeCost } from "../e2c/cost.ts";
 import { callHash } from "../e2c/hash.ts";
 import { pickFinalUnit, makeReach, type PrecedenceGraph } from "../e2c/precedence.ts";

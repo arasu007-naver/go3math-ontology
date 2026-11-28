@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeDeps, MemStore, problemOf, scripted, conceptsOf, type Script } from "./testkit.ts";
+import { makeDeps, problemOf, scripted, conceptsOf, type Script } from "./testkit.ts";
 import { makeCaller, processProblem, type CallEvent } from "../server/e2cPipeline.ts";
 import type { ModelName } from "./types.ts";
 
@@ -84,7 +84,7 @@ test("개념 단계: 주 개념 불일치 → Grok 개념 결정, concept_grok",
     jev: (r) => (r.stage === "unit" ? { unit: [U1] } : { primary: `${U1}#1` }),
     claude: (r) => (r.stage === "unit" ? { unit: [U1] } : { primary: `${U1}#2`, secondary: [`${U1}#1`] }),
     gemini: (r) => (r.stage === "unit" ? { unit: [U1] } : { primary: `${U1}#3` }),
-    grok: (r) => ({ primary: `${U1}#2`, secondary: [`${U1}#1`], unit: [U1] }),
+    grok: () => ({ primary: `${U1}#2`, secondary: [`${U1}#1`], unit: [U1] }),
   });
   const row = await processProblem(problemOf(8), makeDeps(a), ctx);
   assert.equal(row.conceptSource, "grok");

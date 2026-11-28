@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- 테스트 스텁이 요청 본문을 느슨하게 다룬다 */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createClaudeBatchAdapter, customId, type ClaudeBatchClient } from "./claude.ts";

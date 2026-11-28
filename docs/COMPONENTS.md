@@ -20,6 +20,7 @@
 - **DictionaryPage**: `web/src/app/dictionary/page.tsx`
 - **GraphPage**: `web/src/app/graph/page.tsx`
 - **Legacy2OntologyPage**: `web/src/app/legacy2ontology/page.tsx`
+- **Exam2ConceptsPage**: `web/src/app/exam2concepts/page.tsx`
 - **LoginPage**: `web/src/app/login/page.tsx`
 - **MdViewerPage**: `web/src/app/md-viewer/page.tsx`
 - **NetworkPage**: `web/src/app/network/page.tsx`
@@ -48,6 +49,10 @@
 - **JobProgress**: `web/src/components/l2o/JobProgress.tsx`
 - **MigrateAllDialog**: `web/src/components/l2o/MigrateAllDialog.tsx`
 - **UnitDecisionDialog**: `web/src/components/l2o/UnitDecisionDialog.tsx`
+- **Exam2ConceptsClient**: `web/src/components/e2c/Exam2ConceptsClient.tsx`
+- **E2cJobBar**: `web/src/components/e2c/E2cJobBar.tsx`
+- **ProblemLeft**: `web/src/components/e2c/ProblemLeft.tsx`
+- **ProblemRight**: `web/src/components/e2c/ProblemRight.tsx`
 
 ## 시각화
 
@@ -64,6 +69,12 @@
 
 - **schema.sql**: `web/db/schema.sql`
 - **l2o-schema.sql**: `web/db/l2o-schema.sql`
+- **e2c-schema.sql**: `web/db/e2c-schema.sql`
+- **e2c-schema.md**: `docs/e2c-schema.md`
+- **jev-api.md**: `docs/jev-api.md`
+- **e2cSchemaNames**: `web/src/lib/e2c/schema-names.ts`
+- **db-setup-e2c**: `web/scripts/db-setup-e2c.mjs`
+- **e2c .env.example**: `web/.env.example`
 - **curriculum-seed.json**: `web/db/curriculum-seed.json`
 - **level-high.json**: `web/db/level-high.json`
 - **level-middle.json**: `web/db/level-middle.json`
@@ -104,6 +115,21 @@
 - **l2oOverride**: `web/src/lib/server/l2oOverride.ts`
 - **l2oSelect**: `web/src/lib/server/l2oSelect.ts`
 - **l2oUnits**: `web/src/lib/server/l2oUnits.ts`
+- **e2cLegacyDb**: `web/src/lib/server/e2cLegacyDb.ts`
+- **e2cPipeline**: `web/src/lib/server/e2cPipeline.ts`
+- **e2cJobs**: `web/src/lib/server/e2cJobs.ts`
+- **e2cOverride**: `web/src/lib/server/e2cOverride.ts`
+- **e2cService**: `web/src/lib/server/e2cService.ts`
+- **e2cQueries**: `web/src/lib/server/e2cQueries.ts`
+- **e2cApiRoutes**: `web/src/app/api/e2c`
+- **e2cAdapterTypes**: `web/src/lib/e2c/adapters/types.ts`
+- **e2cJevAdapter**: `web/src/lib/e2c/adapters/jev.ts`
+- **e2cClaudeAdapter**: `web/src/lib/e2c/adapters/claude.ts`
+- **e2cGeminiAdapter**: `web/src/lib/e2c/adapters/gemini.ts`
+- **e2cGrokAdapter**: `web/src/lib/e2c/adapters/grok.ts`
+- **e2cBatchClaude**: `web/src/lib/e2c/adapters/batch/claude.ts`
+- **e2cBatchGemini**: `web/src/lib/e2c/adapters/batch/gemini.ts`
+- **e2cBatchGrok**: `web/src/lib/e2c/adapters/batch/grok.ts`
 - **agentPrompt**: `web/src/lib/server/agentPrompt.ts`
 - **agentQuery**: `web/src/lib/server/agentQuery.ts`
 - **agentTemplates**: `web/src/lib/server/agentTemplates.ts`
@@ -123,6 +149,23 @@
 - **toc**: `web/src/lib/toc.ts`
 - **l2oDedupeUtil**: `web/src/lib/l2o/dedupe.ts`
 - **l2oUnitsUtil**: `web/src/lib/l2o/units.ts`
+- **e2cPrecedence**: `web/src/lib/e2c/precedence.ts`
+- **e2cVote**: `web/src/lib/e2c/vote.ts`
+- **e2cReview**: `web/src/lib/e2c/review.ts`
+- **e2cHash**: `web/src/lib/e2c/hash.ts`
+- **e2cPreprocess**: `web/src/lib/e2c/preprocess.ts`
+- **e2cSubjectMap**: `web/src/lib/e2c/subjectMap.ts`
+- **e2cRetry**: `web/src/lib/e2c/retry.ts`
+- **e2cPromptBuild**: `web/src/lib/e2c/promptBuild.ts`
+- **e2cCost**: `web/src/lib/e2c/cost.ts`
+- **e2cConfig**: `web/src/lib/e2c/config.ts`
+- **e2cTypes**: `web/src/lib/e2c/types.ts`
+- **e2cCandidates**: `web/src/lib/e2c/candidates.ts`
+- **e2cEmbedCache**: `web/src/lib/e2c/embedCache.ts`
+- **e2cSemaphore**: `web/src/lib/e2c/semaphore.ts`
+- **e2cPilot**: `web/src/lib/e2c/pilot.ts`
+- **e2cReport**: `web/src/lib/e2c/report.ts`
+- **e2cTestkit**: `web/src/lib/e2c/testkit.ts`
 
 ## 문서
 

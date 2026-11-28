@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { applyOverride, confirmResult, OverrideError, savePilotLabel, type OverrideStore } from "../server/e2cOverride.ts";
-import { makeDeps, MemStore, conceptsOf, problemOf, scripted, type Script } from "./testkit.ts";
+import { makeDeps, conceptsOf, problemOf, scripted, type Script } from "./testkit.ts";
 import { processProblem, type ResultRow } from "../server/e2cPipeline.ts";
 import { buildReport, writeReport, pilotMetrics } from "./report.ts";
 
