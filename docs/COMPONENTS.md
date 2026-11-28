@@ -12,6 +12,7 @@
 - **Home**: `web/src/app/page.tsx`
 - **proxy**: `web/src/proxy.ts`
 - **next.config**: `web/next.config.ts`
+- **instrumentation**: `web/src/instrumentation.ts`
 
 ## 페이지
 
@@ -27,6 +28,7 @@
 - **QuizViewerPage**: `web/src/app/quiz-viewer/page.tsx`
 - **TablesPage**: `web/src/app/tables/page.tsx`
 - **UtilitiesPage**: `web/src/app/utilities/page.tsx`
+- **WorkLogPage**: `web/src/app/work-log/page.tsx`
 
 ## 공용 UI
 
@@ -85,6 +87,7 @@
 - **officeManager**: `web/src/lib/server/officeManager.ts`
 - **mathpix**: `web/src/lib/server/mathpix.ts`
 - **s3**: `web/src/lib/server/s3.ts`
+- **workLog**: `web/src/lib/server/workLog.ts`
 - **embedding**: `web/src/lib/server/embedding.ts`
 - **localLlm**: `web/src/lib/server/localLlm.ts`
 - **jev**: `web/src/lib/server/jev.ts`

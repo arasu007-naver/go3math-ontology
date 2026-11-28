@@ -1,6 +1,7 @@
 import { unzipSync, strFromU8 } from "fflate";
 import { requireSession } from "@/lib/server/auth";
 import { groupChapterFiles, indexKey, KINDS } from "@/lib/bookIndices";
+import { writeWorkLogs, type WorkLogEntry } from "@/lib/server/workLog";
 import { saveBookIndexChapters, type BookIndexChapter } from "@/lib/dictionaryDb";
 
 // 색인 zip 업로드. zip 안의 제n장-indices/dictonary/flashcards/quizzes.json 한 벌을 확인하고 kg 스키마에 저장한다.
@@ -53,6 +54,18 @@ export async function POST(req: Request) {
   try {
     const counts = await saveBookIndexChapters(bookStem, parsed);
     console.info(`[book-indices] ${bookStem} 장 ${parsed.map((c) => c.n).join(",")} 저장: ${JSON.stringify(counts)}`);
+    const chapterNos = parsed.map((c) => c.n);
+    const mk = (category: WorkLogEntry["category"], label: string, n: number, extra: Record<string, unknown> = {}): WorkLogEntry[] =>
+      n > 0
+        ? [{ category, action: "create", summary: `${label} ${n}건 등록 (${bookStem})`, itemCount: n, bookStem, detail: { chapters: chapterNos, unlinked: counts.unlinked, ...extra }, actor: s.user.id }]
+        : [];
+    await writeWorkLogs([
+      ...mk("book_index", "색인", counts.indices),
+      ...mk("dictionary", "딕셔너리", counts.dictionary),
+      ...mk("flashcard", "플래시카드", counts.flashcards, { replaced: counts.replaced.flashcards }),
+      ...mk("quiz", "객관식 퀴즈", counts.quizzes - counts.descriptiveQuizzes, { replaced: counts.replaced.quizzes }),
+      ...mk("descriptive_quiz", "서술형 퀴즈", counts.descriptiveQuizzes, { replaced: counts.replaced.quizzes }),
+    ]);
     return Response.json({ success: true, bookStem, chapters: parsed.map((c) => c.n), counts });
   } catch (e) {
     console.error("[book-indices]", e);

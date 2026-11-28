@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import type { DictionaryItem, FlashcardItem, QuizItem, BookIndexItem } from "./types";
 import { indexKey, linkIndexId, toPages } from "./bookIndices";
+import { isDescriptiveQuiz } from "./l2o/workLogUtil";
 
 const pool = new Pool(process.env.DATABASE_URL ? { connectionString: process.env.DATABASE_URL } : {});
 
@@ -241,7 +242,8 @@ export type BookIndexChapter = { n: number; indices: Raw[]; dictionary: Raw[]; f
 // 같은 도서·단원을 다시 올리면 그 단원의 플래시카드·퀴즈는 교체한다(유니크 키가 없어 쌓이지 않게).
 export async function saveBookIndexChapters(bookStem: string, chapters: BookIndexChapter[]) {
   const text = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
-  const counts = { indices: 0, dictionary: 0, flashcards: 0, quizzes: 0, unlinked: 0 };
+  // quizzes 는 퀴즈 전체 개수, descriptiveQuizzes 는 그중 서술형. replaced 는 단원 교체로 지워진 기존 행 수
+  const counts = { indices: 0, dictionary: 0, flashcards: 0, quizzes: 0, descriptiveQuizzes: 0, unlinked: 0, replaced: { flashcards: 0, quizzes: 0 } };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -304,7 +306,8 @@ export async function saveBookIndexChapters(bookStem: string, chapters: BookInde
         counts.dictionary++;
       }
 
-      await client.query(`DELETE FROM kg.flashcards WHERE book_stem = $1 AND chapter_title = ANY($2)`, [bookStem, [...new Set(ch.flashcards.map(chapterOf))]]);
+      const delFc = await client.query(`DELETE FROM kg.flashcards WHERE book_stem = $1 AND chapter_title = ANY($2)`, [bookStem, [...new Set(ch.flashcards.map(chapterOf))]]);
+      counts.replaced.flashcards += delFc.rowCount ?? 0;
       for (const it of ch.flashcards) {
         await client.query(
           `INSERT INTO kg.flashcards (book_stem, book_title, chapter_title, front, back, hint, formula, pages, book_index_id)
@@ -314,7 +317,8 @@ export async function saveBookIndexChapters(bookStem: string, chapters: BookInde
         counts.flashcards++;
       }
 
-      await client.query(`DELETE FROM kg.quizzes WHERE book_stem = $1 AND chapter_title = ANY($2)`, [bookStem, [...new Set(ch.quizzes.map(chapterOf))]]);
+      const delQz = await client.query(`DELETE FROM kg.quizzes WHERE book_stem = $1 AND chapter_title = ANY($2)`, [bookStem, [...new Set(ch.quizzes.map(chapterOf))]]);
+      counts.replaced.quizzes += delQz.rowCount ?? 0;
       for (const it of ch.quizzes) {
         await client.query(
           `INSERT INTO kg.quizzes (book_stem, book_title, chapter_title, question, options, correct_option_id, explanation, socratic_hints, pages, book_index_id)
@@ -325,6 +329,7 @@ export async function saveBookIndexChapters(bookStem: string, chapters: BookInde
           ]
         );
         counts.quizzes++;
+        if (isDescriptiveQuiz(it)) counts.descriptiveQuizzes++;
       }
     }
     await client.query("COMMIT");
@@ -367,6 +372,16 @@ export async function deleteFlashcard(id?: number, bookStem?: string, front?: st
   } finally {
     client.release();
   }
+}
+
+// 삭제 전에 퀴즈가 서술형인지 확인(작업 이력 분류용). 대상이 없으면 false.
+export async function isDescriptiveQuizRow(id?: number, bookStem?: string, question?: string): Promise<boolean> {
+  const res = id
+    ? await pool.query(`SELECT options FROM kg.quizzes WHERE id = $1`, [id])
+    : bookStem && question
+      ? await pool.query(`SELECT options FROM kg.quizzes WHERE book_stem = $1 AND question = $2 LIMIT 1`, [bookStem, question])
+      : { rows: [] };
+  return res.rows[0] ? isDescriptiveQuiz({ options: res.rows[0].options }) : false;
 }
 
 export async function deleteQuiz(id?: number, bookStem?: string, question?: string): Promise<boolean> {

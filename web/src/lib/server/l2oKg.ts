@@ -1,6 +1,8 @@
 import type { PoolClient } from "pg";
 import { getRawConceptsByIds } from "./legacyDb";
 import { pool } from "./l2oPool";
+import { writeWorkLog } from "./workLog";
+import { actorOfJudgedBy } from "@/lib/l2o/workLogUtil";
 
 // 그룹 1개 → KG 기록 (specs/math_concepts2ontology.md 4.6·5.5). 한 트랜잭션에서:
 // 1) kg.math_concepts: source_id = 대표 legacy id, merged_source_ids = 나머지 멤버. 이미 기록된 그룹이면 같은 노드를 갱신.
@@ -86,8 +88,21 @@ export async function writeGroupToKg(w: KgWrite): Promise<KgWriteResult> {
          dry_run_only = false, last_job_run_id = EXCLUDED.last_job_run_id, updated_at = now()`,
       [w.groupId, w.unitId, conceptId, w.jobId]
     );
+    const retiredEdges = edge.retired + absorbed;
+    // 같은 트랜잭션에 작업 이력을 남긴다(롤백되면 같이 사라진다)
+    await writeWorkLog(
+      {
+        category: "concept",
+        action: "migrate",
+        summary: `개념 #${rep} → KG 개념 #${conceptId} (단원 ${w.unitId}, 엣지 ${edge.kind})`,
+        itemCount: 1,
+        detail: { groupId: w.groupId, legacyIds: members, representativeLegacyId: rep, conceptId, created, unitId: w.unitId, edge: edge.kind, retiredEdges, judgedBy: w.judgedBy, jobId: w.jobId },
+        actor: actorOfJudgedBy(w.judgedBy),
+      },
+      client
+    );
     await client.query("COMMIT");
-    return { conceptId, created, edge: edge.kind, retiredEdges: edge.retired + absorbed };
+    return { conceptId, created, edge: edge.kind, retiredEdges };
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;

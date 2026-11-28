@@ -17,6 +17,7 @@ const NAV = [
   { href: "/aside", label: "Aside" },
   { href: "/legacy2ontology", label: "Legacy→KG" },
   { href: "/utilities", label: "유틸리티" },
+  { href: "/work-log", label: "작업 이력" },
 ];
 
 export default function AppHeader({ subtitle }: { subtitle: string }) {

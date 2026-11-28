@@ -15,6 +15,7 @@ import {
 } from "@/lib/dictionaryDb";
 import type { FlashcardItem, QuizItem, BookIndexItem, DictionaryItem } from "@/lib/types";
 import { requireSession } from "@/lib/server/auth";
+import { logBulkCreate } from "@/lib/server/workLog";
 import { isSafeBookStem } from "@/lib/server/requestGuards";
 
 export async function POST(req: Request) {
@@ -107,6 +108,11 @@ export async function POST(req: Request) {
         }
       }
     }
+
+    await logBulkCreate(
+      { flashcards: totalFlashcards, quizzes: totalQuizzes, bookIndex: totalBookIndex, dictionary: totalDictionary },
+      s.user.id
+    );
 
     return NextResponse.json({
       success: true,
