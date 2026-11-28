@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import { pool } from "./l2oPool";
 import { countLegacyForBaseline } from "./legacyDb";
-import { isDescriptiveQuiz } from "@/lib/l2o/workLogUtil";
+import { baselineDiff, computeDayNav, isDescriptiveQuiz } from "@/lib/l2o/workLogUtil";
 
 // 작업 이력 kg.work_log: 기록 · 조회 · 서버 시작 시 기준선 시드. 로그 실패가 본 작업을 실패시키지 않게 한다.
 export type WorkLogCategory = "concept" | "problem" | "book_index" | "dictionary" | "flashcard" | "quiz" | "descriptive_quiz" | "baseline";
@@ -98,11 +98,9 @@ export async function listWorkLogByDate(date?: string): Promise<WorkLogPage> {
   if (list.length === 0) {
     return { total: 0, dayCount: 0, date: null, pageIndex: null, firstDate: null, lastDate: null, newerDate: null, olderDate: null, items: [] };
   }
-  const cur = date ?? list[0];
+  const nav = computeDayNav(list, date);
+  const cur = nav.date as string;
   const idx = list.indexOf(cur);
-  // list 는 내림차순(YYYY-MM-DD 문자열 비교 = 날짜 비교)
-  const newerDate = [...list].reverse().find((d) => d > cur) ?? null;
-  const olderDate = list.find((d) => d < cur) ?? null;
   let items: WorkLogItem[] = [];
   if (idx >= 0) {
     const r = await pool.query(
@@ -122,17 +120,7 @@ export async function listWorkLogByDate(date?: string): Promise<WorkLogPage> {
       createdAt: new Date(x.created_at).toISOString(),
     }));
   }
-  return {
-    total,
-    dayCount: list.length,
-    date: cur,
-    pageIndex: idx >= 0 ? idx + 1 : null,
-    firstDate: list[0],
-    lastDate: list[list.length - 1],
-    newerDate,
-    olderDate,
-    items,
-  };
+  return { total, dayCount: list.length, ...nav, date: cur, items } as WorkLogPage;
 }
 
 const num = async (sql: string, c: PoolClient): Promise<number> => Number((await c.query(sql)).rows[0].n);
@@ -181,10 +169,7 @@ export async function seedBaselineIfEmpty(): Promise<boolean> {
       quizzes: await num("SELECT COUNT(*)::int AS n FROM kg.quizzes WHERE jsonb_array_length(options) > 0", client),
       descriptiveQuizzes: await num("SELECT COUNT(*)::int AS n FROM kg.quizzes WHERE jsonb_array_length(options) = 0", client),
     };
-    const diff = {
-      conceptsNotMigrated: Math.max(0, (legacy.mathConcepts.active ?? 0) - kg.representedLegacyIds),
-      problemsNotLinked: (legacy.questionsUnits.total ?? 0) - (kg.problemLinks ?? 0),
-    };
+    const diff = baselineDiff(legacy.mathConcepts.active, kg.representedLegacyIds, legacy.questionsUnits.total, kg.problemLinks);
     const f = (v: number | null) => (v == null ? "?" : String(v));
     const summary =
       `기준선: legacy 개념 ${f(legacy.mathConcepts.total)}(활성 ${f(legacy.mathConcepts.active)}) / KG 개념 ${kg.mathConcepts}(legacy ${kg.representedLegacyIds}건 대표) / 미이전 ${diff.conceptsNotMigrated}, ` +
