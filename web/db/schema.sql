@@ -459,3 +459,18 @@ CREATE TABLE IF NOT EXISTS kg.document_convert_log (
 CREATE INDEX IF NOT EXISTS idx_dcl_book ON kg.document_convert_log (book_stem, created_at DESC);
 
 
+
+-- 작업 이력: KG 쓰기 작업(개념 전이·색인·딕셔너리·플래시카드·퀴즈 등록/삭제)과 기준선. 조회: /work-log
+-- (같은 DDL 을 src/lib/server/workLog.ts 가 서버 시작 때도 실행한다)
+CREATE TABLE IF NOT EXISTS kg.work_log (
+  id         BIGSERIAL PRIMARY KEY,
+  category   TEXT NOT NULL CHECK (category IN ('concept','problem','book_index','dictionary','flashcard','quiz','descriptive_quiz','baseline')),
+  action     TEXT NOT NULL CHECK (action IN ('create','update','delete','migrate','baseline')),
+  summary    TEXT NOT NULL,             -- 화면에 보이는 한 줄 설명
+  item_count INT  NOT NULL DEFAULT 1,   -- 이 로그가 다룬 항목 수
+  book_stem  TEXT,                      -- 도서 관련 작업이면 도서 stem
+  detail     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  actor      TEXT,                      -- 로그인 사용자 id, 시스템 작업이면 'system'
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_work_log_created ON kg.work_log (created_at DESC, id DESC);

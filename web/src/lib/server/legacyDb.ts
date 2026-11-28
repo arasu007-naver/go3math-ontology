@@ -146,3 +146,10 @@ export async function listExcludedConcepts(): Promise<LegacyConcept[]> {
   const [rows] = await db().query<RowDataPacket[]>(`SELECT ${COLUMNS} FROM math_concepts WHERE is_on <> 1 ORDER BY id ASC`);
   return rows.map(toConcept);
 }
+
+// 기준선 로그용 건수 (SELECT 만)
+export async function countLegacyForBaseline(): Promise<{ mathConceptsTotal: number; mathConceptsActive: number; questionsUnitsTotal: number }> {
+  const [c] = await db().query<RowDataPacket[]>("SELECT COUNT(*) AS total, COALESCE(SUM(is_on = 1), 0) AS active FROM math_concepts");
+  const [q] = await db().query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM questions_units");
+  return { mathConceptsTotal: Number(c[0].total), mathConceptsActive: Number(c[0].active), questionsUnitsTotal: Number(q[0].total) };
+}
