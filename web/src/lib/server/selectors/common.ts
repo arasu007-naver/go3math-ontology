@@ -50,8 +50,13 @@ ${lines.join("\n")}`;
 }
 
 export class HttpError extends Error {
-  constructor(public status: number, public retryAfter: number | null, message: string) {
+  // 필드를 직접 선언한다(node --experimental-strip-types 는 생성자 매개변수 프로퍼티를 지원하지 않는다)
+  status: number;
+  retryAfter: number | null;
+  constructor(status: number, retryAfter: number | null, message: string) {
     super(message);
+    this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 

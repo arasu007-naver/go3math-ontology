@@ -9,7 +9,9 @@
     "lint": "eslint",
     "db:setup": "node --env-file-if-exists=.env.local scripts/db-setup.mjs",
     "db:l2o": "node --env-file-if-exists=.env.local scripts/db-setup-l2o.mjs",
+    "db:e2c": "node --env-file-if-exists=.env.local scripts/db-setup-e2c.mjs",
     "test:l2o": "node --experimental-strip-types --test \"src/lib/l2o/*.test.ts\"",
+    "test:e2c": "node --experimental-strip-types --test \"src/lib/e2c/**/*.test.ts\"",
     "db:import-middle": "node --env-file-if-exists=.env.local scripts/db-import-levels.mjs db/level-middle.json",
     "db:import-high": "node --env-file-if-exists=.env.local scripts/db-import-levels.mjs db/level-high.json",
     "db:import-prereq": "node --env-file-if-exists=.env.local scripts/db-import-prereqs.mjs db/level-prereq.json"
